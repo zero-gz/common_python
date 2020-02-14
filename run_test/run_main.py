@@ -13,7 +13,9 @@
 #         os.system('python D:\\Python\\Unittest\\search\\test_case\\%s 1>>D:\\Python\\Unittest\\search\\report\\log.txt 2>&1'%a)
 
 import unittest
-import HtmlTestRunner
+import sys
+sys.path.append("..")
+from py_tools import HtmlTestRunner
 path = "./test_case"
 discover = unittest.defaultTestLoader.discover(path, pattern='*.py')
 
@@ -22,8 +24,9 @@ if __name__ == "__main__":
     runner = unittest.TextTestRunner()
 
     # htmltest runnder has some problem, output has just a litter content
-    # fp = open("res.html","wb")
-    # runner = HtmlTestRunner.HTMLTestRunner(stream=fp, report_title="simple test", descriptions="test case")
+    fp = open("res.html","wb")
+    runner = HtmlTestRunner.HTMLTestRunner(stream=fp, report_title="simple test", descriptions="test case", report_name="zero")
     runner.run(discover)
+    fp.close()
 
 #测试完成
