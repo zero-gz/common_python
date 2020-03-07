@@ -4,8 +4,9 @@
 	{
 		_albedo_tex ("albedo texture", 2D) = "white" {}
 		_normal_tex ("normal texture", 2D) = "bump"{}
-		_roughness ("Roughness", Range(0.0, 1.0)) = 0.0
-		_metallic ("Metallic", Range(0.0, 1.0)) = 0.0
+		_mix_tex ("mix texture (R metallic, G roughness)", 2D) = "black" {}
+		//_roughness ("Roughness", Range(0.0, 1.0)) = 0.0
+		//_metallic ("Metallic", Range(0.0, 1.0)) = 0.0
 		_emissive ("Emissive", Color) = (0.0, 0.0, 0.0, 0.0)
 	}
 	SubShader
@@ -61,6 +62,7 @@
 
 			sampler2D _albedo_tex;
 			sampler2D _normal_tex;
+			sampler2D _mix_tex;
 
 			float _roughness;
 			float _metallic;
@@ -132,15 +134,27 @@
 			#define PI 3.1415926
 			#define BLACK_COLOR float3(0.0, 0.0, 0.0)
 			#define WHITE_COLOR float3(1.0, 1.0, 1.0)
-			#define CHAOS 0.000001			
+			#define CHAOS 0.000001	
+
+			float3 gamma_correct_began(float3 input_color)
+			{
+				return input_color*input_color;
+			}		
+
+			float3 gamma_correct_end(float3 input_color)
+			{
+				return sqrt(input_color);
+			}
 
 			MaterialVars gen_material_vars(v2f i)
 			{
 				MaterialVars mtl;
-				mtl.albedo = tex2D(_albedo_tex, i.uv);
-				mtl.normal = UnpackNormal(tex2D(_normal_tex, i.uv));
-				mtl.roughness = _roughness;
-				mtl.metallic = _metallic;
+				mtl.albedo =  gamma_correct_began(tex2D(_albedo_tex, i.uv).rgb);
+
+				float3 normal_color = tex2D(_normal_tex, i.uv).rgb;
+				mtl.normal = normal_color*2.0 - 1.0;
+				mtl.roughness = tex2D(_mix_tex, i.uv).g; //_roughness;
+				mtl.metallic = tex2D(_mix_tex, i.uv).r; //_metallic;
 				mtl.emissive = _emissive;
 				mtl.opacity = 1.0;
 				mtl.occlusion = 1.0;
@@ -153,7 +167,7 @@
 				LightingVars data;
 				data.T = normalize(i.world_tangent);
 				data.B = normalize(i.world_binnormal);
-				data.N = normalize(i.world_tangent * mtl.normal.x + i.world_binnormal * mtl.normal.y + i.world_normal * mtl.normal.z);
+				data.N = normalize(normalize(i.world_tangent) * mtl.normal.x + normalize(i.world_binnormal) * mtl.normal.y + normalize(i.world_normal) * mtl.normal.z);
 
 				data.V = normalize(_WorldSpaceCameraPos.xyz - i.world_pos.xyz);
 				data.L = normalize(_WorldSpaceLightPos0.xyz);
@@ -219,7 +233,7 @@
 				float VoH = max(saturate(dot(data.V, data.H)), CHAOS);
 
 				// mtl中存放的是 感知线性粗糙度（为了方便美术调整，所以值为实际值的sqrt)				
-				float use_roughness = max(Pow2(Roughness), 0.0001);
+				float use_roughness = max(Pow2(Roughness), 0.002);
 				float a2 = Pow2(use_roughness);
 				//float Energy = EnergyNormalization( a2, Context.VoH, AreaLight );
 				float Energy = 1.0;
@@ -359,6 +373,7 @@
 				//GI的处理
 				LightingResult gi_result = gi_lighting(data);
 				final_color = final_color + gi_result.lighting_diffuse + gi_result.lighting_specular;
+				final_color = gamma_correct_end(final_color);
 
 				// sample the texture
 				return fixed4(final_color, 1.0);
