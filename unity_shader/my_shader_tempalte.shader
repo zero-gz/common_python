@@ -11,12 +11,14 @@
 	}
 	SubShader
 	{
-		// 这个ForwardBase非常重要，不加这个， 光照取的结果都会跳变……
-		Tags {"LightMode"="ForwardBase" "RenderType"="Opaque" }
+		// 这里的tags要这么写，不然阴影会有问题
+		Tags { "RenderType"="Opaque" "Queue"="Geometry"}
 		LOD 100
 
 		Pass
 		{
+			// 这个ForwardBase非常重要，不加这个， 光照取的结果都会跳变……
+			Tags {"LightMode"="ForwardBase"}
 			CGPROGRAM
 			#pragma target 3.0
 			#pragma vertex vert
@@ -27,10 +29,12 @@
 			//#pragma multi_compile __ UNITY_SPECCUBE_BOX_PROJECTION   //奇怪了，不开启这个也能生效，环境球反射……
 			#pragma multi_compile __ LIGHTPROBE_SH
 
+			#pragma multi_compile_fwdbase
 			#pragma enable_d3d11_debug_symbols
 			
 			#include "UnityCG.cginc"
 			#include "Lighting.cginc"
+			#include "AutoLight.cginc"
 
 			struct appdata
 			{
@@ -58,6 +62,8 @@
 				#if defined(LIGHTMAP_ON) || defined(DYNAMICLIGHTMAP_ON)
 					float4 lightmap_uv: TEXCOORD5;
 				#endif
+
+				SHADOW_COORDS(6)
 			};
 
 			sampler2D _albedo_tex;
@@ -88,6 +94,8 @@
 					o.lightmap_uv.zw = v.uv2.xy * unity_DynamicLightmapST.xy + unity_DynamicLightmapST.zw;
 				#endif
 
+				TRANSFER_SHADOW(o);
+
 				return o;
 			}
 
@@ -109,6 +117,10 @@
 				#if defined(LIGHTMAP_ON) || defined(DYNAMICLIGHTMAP_ON)
 					float4 lightmap_uv;
 				#endif
+
+				float3 world_pos;
+				float occlusion; //遮蔽 全局光，包括indrect diffuse和specular
+				float shadow; // 遮蔽实时灯光
 			};
 
 			struct MaterialVars {
@@ -181,6 +193,11 @@
 				#if defined(LIGHTMAP_ON) || defined(DYNAMICLIGHTMAP_ON)
 					data.lightmap_uv = i.lightmap_uv;
 				#endif
+
+				data.world_pos = i.world_pos;
+
+				data.occlusion = mtl.occlusion;
+				data.shadow = UNITY_SHADOW_ATTENUATION(i, data.world_pos);
 				return data;
 			}
 
@@ -366,13 +383,16 @@
 				LightingResult dir_result = direct_isotropy_lighting(data);
 				
 				fixed3 final_color = dir_result.lighting_diffuse + dir_result.lighting_specular;
+				final_color *= data.shadow;
 				
 				// unity的问题，乘以了pi
 				final_color = final_color * PI;
 
 				//GI的处理
 				LightingResult gi_result = gi_lighting(data);
-				final_color = final_color + gi_result.lighting_diffuse + gi_result.lighting_specular;
+
+				final_color = final_color + (gi_result.lighting_diffuse + gi_result.lighting_specular)*data.occlusion;
+
 				final_color = gamma_correct_end(final_color);
 
 				// sample the texture
@@ -380,6 +400,43 @@
 			}
 			ENDCG
 		}
+
+
+		// Pass to render object as a shadow caster
+		
+		Pass {
+			Tags { "LightMode" = "ShadowCaster" }
+			
+			CGPROGRAM
+			
+			#pragma vertex vert
+			#pragma fragment frag
+			
+			#pragma multi_compile_shadowcaster
+			
+			#include "UnityCG.cginc"
+			
+			struct v2f {
+				V2F_SHADOW_CASTER;
+				float2 uv:TEXCOORD1;
+			};
+			
+			v2f vert(appdata_base v) {
+				v2f o;
+				
+				TRANSFER_SHADOW_CASTER_NORMALOFFSET(o)
+				
+				o.uv = v.texcoord;
+				
+				return o;
+			}
+			
+			fixed4 frag(v2f i) : SV_Target {				
+				SHADOW_CASTER_FRAGMENT(i)
+			}
+			ENDCG
+		}
+		
 	}
-	FallBack "Specular"
+
 }
