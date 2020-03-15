@@ -1,0 +1,18 @@
+相应的python接口,主要是处理 图片转换,取像素后的像素处理两大功能:
+1. 图片转换
+   不使用PIL直接进行处理,PIL处理太麻烦,并且功能转换不是太强大, 使用PVRTexTool进行处理
+
+
+2. 取像素的PIL处理
+    im.getpixel
+
+PIL比较特殊的功能:
+1.读取较多格式的图片文件,测试如下:
+    png,tga,bmp,jpg,gif,
+    dds(标准的bc1,bc2,bc3等等,如果只是作为容器,里面放置rgb,rgba不能识别)
+    pvr,ktx不能识别
+
+    需要配合 PVRTexTool进行转换后,处理文件
+2. im.split() 可以得到[R,G,B,{A}]的列表
+   im.filter(ImageFilter) 可以使用常用的图片后处理: 高斯模糊,勾边,锐化,平滑等
+3. 能按帧读取gif
