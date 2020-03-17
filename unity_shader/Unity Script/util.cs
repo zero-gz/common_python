@@ -1,18 +1,57 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using System.IO;
-using System.Text;
 using UnityEditor;
 
-public class util : MonoBehaviour {
-    public string obj_save_path = "Assets/Resources/";
-    string trans_mesh_to_string(MeshFilter mf, Vector3 scale)
+using System.IO;
+using System.Text;
+
+// 制作这种通用类
+public class util{
+
+    public static void test_call()
+    {
+        Debug.Log("i want to call !!!!");
+    }
+
+    public static void save_texture(string save_path, Texture2D tex)
+    {
+        //if(tex.)
+
+        byte[] data;
+
+        if (tex.format == TextureFormat.ARGB32 || tex.format == TextureFormat.RGB24 || tex.format == TextureFormat.RGBA32)
+            data = tex.EncodeToPNG();
+        else if (tex.format == TextureFormat.RGBAHalf || tex.format == TextureFormat.RGBAFloat)
+            data = tex.EncodeToEXR();
+        else
+        {
+            Debug.LogError("texture is not support format!");
+            return;
+        }
+        System.IO.File.WriteAllBytes(save_path, data);
+        AssetDatabase.Refresh();
+    }
+
+    public static void save_rendertarget(string save_path, int width = 0,int height = 0)
+    {
+        if (width == 0) width = Screen.width;
+        if (height == 0) height = Screen.height;
+
+        Texture2D tex = new Texture2D(width, height, TextureFormat.ARGB32, false);
+        tex.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+        tex.Apply();
+
+        save_texture(save_path, tex);
+    }
+
+    // -----------------------------------------------------------------------------
+
+    public static string trans_mesh_to_string(MeshFilter mf, Vector3 scale)
     {
         Mesh mesh = mf.mesh;
-        Material[] sharedMaterials = mf.GetComponent<Renderer>().sharedMaterials;
-        Vector2 textureOffset = new Vector2(0, 0); // mf.GetComponent<Renderer>().material.GetTextureOffset("_MainTex");
-        Vector2 textureScale = new Vector2(1, 1); // mf.GetComponent<Renderer>().material.GetTextureScale("_MainTex");
+        Vector2 textureOffset = new Vector2(0, 0);
+        Vector2 textureScale = new Vector2(1, 1);
         StringBuilder stringBuilder = new StringBuilder().Append("mtllib design.mtl")
             .Append("\n")
             .Append("g ")
@@ -87,26 +126,99 @@ public class util : MonoBehaviour {
         return stringBuilder.ToString();
     }
 
-    public void save_obj()
+    public void save_mesh_to_obj(GameObject obj, string save_path)
     {
-        Renderer renderer = gameObject.GetComponent<Renderer>();
+        Renderer renderer = obj.GetComponent<Renderer>();
         MeshFilter mf = renderer.GetComponent<MeshFilter>();
 
-        using (StreamWriter streamWriter = new StreamWriter(string.Format("{0}{1}.obj", obj_save_path, mf.name)))
-        {
-            streamWriter.Write(trans_mesh_to_string(mf, new Vector3(-1f, 1f, 1f)));
-            streamWriter.Close();
-        }
+        StreamWriter streamWriter = new StreamWriter(save_path);
+        streamWriter.Write(trans_mesh_to_string(mf, new Vector3(-1f, 1f, 1f)));
+        streamWriter.Close();
+        
         AssetDatabase.Refresh();
     }
+    // -----------------------------------------------------------------------------------------------------------------
+    public static Material change_material(GameObject obj, string shader_name)
+    {
+        Renderer renderer = obj.GetComponent<Renderer>();
+        MeshFilter mf = renderer.GetComponent<MeshFilter>();
 
-	// Use this for initialization
-	void Start () {
-		
-	}
-	
-	// Update is called once per frame
-	void Update () {
-		
-	}
+        Material old_mtl = renderer.material;
+
+        Material new_mtl = new Material(Shader.Find(shader_name));
+        new_mtl.SetPass(0);
+        renderer.material = new_mtl;
+
+        return old_mtl;
+    }
+
+    // ------------------------------------------------------------------------------------------------------------------
+
+    public static Mesh create_plane(int w_num, int h_num)
+    {
+        Mesh sub_mesh = new Mesh();
+
+        int vertex_num = (w_num + 1) * (h_num + 1);
+        int index_num = w_num * h_num * 2 * 3;
+        Vector3[] vertices = new Vector3[vertex_num];
+        Vector2[] uv = new Vector2[vertex_num];
+        int[] indexs = new int[index_num];
+
+        int i, j, count;
+        i = j = count = 0;
+        for (i = 0; i <= h_num; i++)
+        {
+            for (j = 0; j <= w_num; j++)
+            {
+                int index = (w_num + 1) * i + j;
+                vertices[index] = new Vector3(j * 1.0f / w_num, i * 1.0f / h_num, 0);
+                uv[index] = new Vector2(j * 1.0f / w_num, i * 1.0f / h_num);
+            }
+        }
+
+
+        for (i = 0; i < h_num; i++)
+        {
+            for (j = 0; j < w_num; j++)
+            {
+                //产生两个三角形
+                int tri_a_1 = (w_num + 1) * i + j;
+                int tri_b_1 = tri_a_1 + 1;
+                int tri_c_1 = (w_num + 1) * (i + 1) + (j + 1);
+
+                int tri_a_2 = tri_a_1;
+                int tri_b_2 = tri_c_1;
+                int tri_c_2 = (w_num + 1) * (i + 1) + j;
+
+                indexs[count] = tri_a_1;
+                indexs[count + 1] = tri_b_1;
+                indexs[count + 2] = tri_c_1;
+
+                indexs[count + 3] = tri_a_2;
+                indexs[count + 4] = tri_b_2;
+                indexs[count + 5] = tri_c_2;
+
+                count += 6;
+            }
+        }
+
+        sub_mesh.vertices = vertices;
+        sub_mesh.uv = uv;
+        sub_mesh.triangles = indexs;
+
+        /*
+        string s = "";
+        for (i = 0; i < vertex_num; i++)
+            s += string.Format("({0}, {1}, {2}), ", vertices[i].x, vertices[i].y, vertices[i].z);
+
+        s += "\n";
+        for (i = 0; i < index_num; i++)
+            s += string.Format("{0} ", indexs[i]);
+
+        Debug.Log(s);
+        */
+        sub_mesh.RecalculateBounds();
+        return sub_mesh;
+    }
+
 }
