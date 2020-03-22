@@ -5,6 +5,7 @@ using UnityEditor;
 
 using System.IO;
 using System.Text;
+using System;
 
 // 制作这种通用类
 public class util{
@@ -33,16 +34,35 @@ public class util{
         AssetDatabase.Refresh();
     }
 
-    public static void save_rendertarget(string save_path, int width = 0,int height = 0)
+    public static void save_screen_tex(string save_path, int start_x = 0, int start_y = 0, int width = 0,int height = 0)
     {
         if (width == 0) width = Screen.width;
         if (height == 0) height = Screen.height;
 
         Texture2D tex = new Texture2D(width, height, TextureFormat.ARGB32, false);
+        Debug.Log(string.Format("get screen width and height: {0} {1}", Screen.width, Screen.height) );
+        tex.ReadPixels(new Rect(start_x, start_y, width, height), 0, 0);
+        tex.Apply();
+
+        save_texture(save_path, tex);
+    }
+
+    public static void save_rendertexture(string save_path, RenderTexture rt)
+    {
+        RenderTexture prev = RenderTexture.active;
+        RenderTexture.active = rt;
+
+        int width = rt.width;
+        int height = rt.height;
+
+        Texture2D tex = new Texture2D(width, height, TextureFormat.ARGB32, false);
+        Debug.Log(string.Format("get render texture width and height: {0} {1}", width, height));
         tex.ReadPixels(new Rect(0, 0, width, height), 0, 0);
         tex.Apply();
 
         save_texture(save_path, tex);
+
+        RenderTexture.active = prev;
     }
 
     // -----------------------------------------------------------------------------
@@ -141,7 +161,6 @@ public class util{
     public static Material change_material(GameObject obj, string shader_name)
     {
         Renderer renderer = obj.GetComponent<Renderer>();
-        MeshFilter mf = renderer.GetComponent<MeshFilter>();
 
         Material old_mtl = renderer.material;
 
@@ -221,4 +240,142 @@ public class util{
         return sub_mesh;
     }
 
+    // -------------------------------------------------------------------------
+
+    public static RenderTexture gpu_draw_rendertexture(Texture src, Material mtl, int width=0, int height=0)
+    {
+        if (width == 0) width = src.width;
+        if (height == 0) height = src.height;
+        RenderTexture dst = new RenderTexture(width, height, 0, RenderTextureFormat.ARGB32);
+        Graphics.Blit(src, dst, mtl);
+        return dst;
+    }
+}
+
+
+public class script_util : MonoBehaviour
+{
+    public bool grab = false;
+
+    virtual protected void space_key_func()
+    {
+        Debug.Log("get space key down!");
+    }
+
+    protected void Update()
+    {
+        //Press space to start the screen grab
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            grab = true;
+            space_key_func();
+        }
+    }
+}
+
+public class paint_util: MonoBehaviour
+{
+    protected RenderTexture paint;
+    //protected Texture2D paint_tex;
+    private Vector2 last_point;
+
+    public float paint_size = 5.0f;
+    public float diffrence = 1.0f;
+    public int rt_size_x = 512;
+    public int rt_size_y = 512;
+    // Use this for initialization
+    void Start()
+    {
+        paint = new RenderTexture(rt_size_x, rt_size_y, 0, RenderTextureFormat.ARGB32);
+        //paint_tex = new Texture2D(rt_size_x, rt_size_y, TextureFormat.ARGB32, false);
+    }
+
+    void draw_texture(Vector2 mouse_pos)
+    {
+        Material mtl = AssetDatabase.LoadAssetAtPath<Material>("Assets/Scenes/test_script/test_paint.mat");
+        mtl.SetVector("_paint", new Vector4(Screen.width - mouse_pos.x, Screen.height - mouse_pos.y, paint_size, 1.0f));
+        paint = util.gpu_draw_rendertexture(paint, mtl);
+    }
+
+    /*
+    int Clamping(int x, int edage_x, int edage_y)
+    {
+        if (x <= edage_x) x = edage_x;
+        if (x >= edage_y) x = edage_y;
+        return x;
+    }
+
+    Color Lerp(Color one, Color two, float factor)
+    {
+        Color output = new Color();
+        output.r = Mathf.Lerp(one.r, two.r, factor);
+        output.g = Mathf.Lerp(one.g, two.g, factor);
+        output.b = Mathf.Lerp(one.b, two.b, factor);
+        output.a = Mathf.Lerp(one.a, two.a, factor);
+        return output;
+    }
+
+    void draw_texture_cpu(Vector2 mouse_pos)
+    {
+        int aim_x = (int)((Screen.width - mouse_pos.x) / Screen.width * rt_size_x);
+        int aim_y = (int)((Screen.height - mouse_pos.y) / Screen.height * rt_size_y);
+
+        int half_size = (int)(paint_size / 2);
+        for (int x = -half_size; x <= half_size; x++)
+            for (int y = -half_size; y <= half_size; y++)
+            {
+                int tmp_x = aim_x + x;
+                int tmp_y = aim_y + y;
+
+                tmp_x = Clamping(tmp_x, 0, rt_size_x);
+                tmp_y = Clamping(tmp_y, 0, rt_size_y);
+
+
+                Color color = new Color(1.0f, 0.0f, 0.0f);
+                Color org_color = paint_tex.GetPixel(tmp_x, tmp_y);
+
+                float factor = (float)(Math.Sqrt(x * x + y * y) / half_size);
+                Color final_color = Lerp(color, org_color, factor);
+
+                paint_tex.SetPixel(tmp_x, tmp_y, color);
+            }
+
+        Debug.Log(string.Format("get paint color: {0}, {1}", aim_x, aim_y));
+        paint_tex.Apply();
+    }
+    */
+
+    public virtual void after_draw_texture()
+    {
+        // paint rendertexture is ok, try to do something
+        Debug.Log("call after draw texture, the paint rt is ok!");
+    }
+
+    // Update is called once per frame
+    void Update()
+    {
+        if (Input.GetMouseButton(0))
+        {
+            Vector2 now_point = Input.mousePosition;
+            if (last_point == Vector2.zero) last_point = now_point;
+            float dist = Vector2.Distance(now_point, last_point);
+            int step = (int)(dist / diffrence);
+            Vector2 dir = now_point - last_point;
+            dir.Normalize();
+
+            for (int i = 0; i < step; i++)
+            {
+                Vector2 aim_pos = last_point + dir * i;
+                draw_texture(aim_pos);
+            }
+
+            draw_texture(now_point);
+            after_draw_texture();
+
+            last_point = now_point;
+        }
+
+        if (Input.GetMouseButtonUp(0))
+            last_point = Vector2.zero;
+    }
 }
