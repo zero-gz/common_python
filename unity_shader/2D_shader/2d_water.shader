@@ -49,7 +49,10 @@
 				v2f o;
 				o.vertex = UnityObjectToClipPos(v.vertex);
 				o.uv = TRANSFORM_TEX(v.uv, _MainTex);
-				o.distortion_uv = TRANSFORM_TEX(v.uv, _distortion_tex) + _SinTime.x*float2(_speed_x, _speed_y);
+				o.distortion_uv = TRANSFORM_TEX(v.uv, _distortion_tex) + _Time.x*float2(_speed_x, _speed_y);
+
+				//o.uv = o.uv*float2(-1, -1);
+				//o.distortion_uv = o.distortion_uv*float2(-1, -1);
 				return o;
 			}
 
