@@ -1,6 +1,6 @@
 ﻿using UnityEngine;
 
-public class SimplexNoise
+public class SimplexNoiseGenerator
 {
     private static int[][] grad3 = new int[][]{
                         new int[]{1, 1, 0},
@@ -66,7 +66,7 @@ public class SimplexNoise
         138,236,205,93,222,114,67,29,24,72,243,141,128,195,78,66,215,61,156,180};
     // To remove the need for index wrapping, float the permutation table length
     private static int[] perm = new int[512];
-    static SimplexNoise()
+    static SimplexNoiseGenerator()
     {
         for (int i = 0; i < 512; i++)
             perm[i] = p[i & 255];
