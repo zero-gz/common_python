@@ -1,22 +1,22 @@
-﻿Shader "my_shader/test_paint"
+﻿// Upgrade NOTE: replaced 'mul(UNITY_MATRIX_MVP,*)' with 'UnityObjectToClipPos(*)'
+
+Shader "my_shader/ClearBrush"
 {
 	Properties
 	{
 		_MainTex ("Texture", 2D) = "white" {}
-		_paint ("Paint Data", Vector) = (100, 100, 0.5, 1.0)
-		_color ("Paint Color", Color) = (1.0, 0.0, 0.0, 1.0)
 	}
 	SubShader
 	{
 		Tags { "RenderType"="Opaque" }
 		LOD 100
-
+		ZTest Always Cull Off ZWrite Off Fog{ Mode Off }
+		Blend One DstColor
 		Pass
 		{
 			CGPROGRAM
 			#pragma vertex vert
 			#pragma fragment frag
-			#pragma enable_d3d11_debug_symbols
 			
 			#include "UnityCG.cginc"
 
@@ -34,8 +34,6 @@
 
 			sampler2D _MainTex;
 			float4 _MainTex_ST;
-			float4 _paint;
-			float4 _color;
 			
 			v2f vert (appdata v)
 			{
@@ -44,21 +42,12 @@
 				o.uv = TRANSFORM_TEX(v.uv, _MainTex);
 				return o;
 			}
-
-			fixed4 draw_point(fixed4 col, float2 now_screen_pos, float2 aim_screen_pos, float blur)
-			{
-				float dist = length(aim_screen_pos - now_screen_pos);
-				fixed4 out_col = lerp(_color, col, abs(dist-blur)/blur );
-				return out_col;
-			}
 			
 			fixed4 frag (v2f i) : SV_Target
 			{
 				// sample the texture
-				fixed4 col = tex2D(_MainTex, i.uv);
-
-				col = draw_point(col, i.uv*_ScreenParams.xy, _paint.xy, _paint.z);
-				return col;
+				//fixed4 col = tex2D(_MainTex, i.uv);
+				return float4(0.0, 0.0, 0.0, 1.0);
 			}
 			ENDCG
 		}

@@ -275,75 +275,121 @@ public class script_util : MonoBehaviour
 
 public class paint_util: MonoBehaviour
 {
-    protected RenderTexture paint;
-    //protected Texture2D paint_tex;
+    protected RenderTexture paint_rt;
     private Vector2 last_point;
 
-    public float paint_size = 5.0f;
-    public float diffrence = 1.0f;
-    public int rt_size_x = 512;
-    public int rt_size_y = 512;
+    public int rt_size = 512;
+    #region Material properties
+    [SerializeField, SetProperty("brushSize")]
+    private float _brushSize = 0.02f;
+    public float brushSize
+    {
+        get
+        {
+            return _brushSize;
+        }
+        set
+        {
+            _brushSize = value;
+            UpdateBrushMaterial();
+        }
+    }
+
+    [SerializeField, SetProperty("paintcolor")]
+    private Color _paintColor = new Color(1.0f, 0.0f, 0.0f);
+    public Color paintcolor
+    {
+        get
+        {
+            return _paintColor;
+        }
+        set
+        {
+            _paintColor = value;
+            UpdateBrushMaterial();
+        }
+    }
+    #endregion
+
+    private Material _paint_mtl;
+    private Material _clear_mtl;
+    private float _brushLerpSize;
+    public float _brushStength = 1.0f;
     // Use this for initialization
     void Start()
     {
-        paint = new RenderTexture(rt_size_x, rt_size_y, 0, RenderTextureFormat.ARGB32);
-        //paint_tex = new Texture2D(rt_size_x, rt_size_y, TextureFormat.ARGB32, false);
+        paint_rt = new RenderTexture(rt_size, rt_size, 0, RenderTextureFormat.ARGB32);
+        InitData();
     }
 
-    void draw_texture(Vector2 mouse_pos)
+    public virtual void InitData()
     {
-        Material mtl = AssetDatabase.LoadAssetAtPath<Material>("Assets/Scenes/test_script/test_paint.mat");
-        mtl.SetVector("_paint", new Vector4(Screen.width - mouse_pos.x, Screen.height - mouse_pos.y, paint_size, 1.0f));
-        paint = util.gpu_draw_rendertexture(paint, mtl);
+        _brushLerpSize = rt_size * _brushSize / 2.0f;
+        last_point = Vector2.zero;
+
+        if (_paint_mtl == null)
+        {
+            UpdateBrushMaterial();
+        }
+        if (_clear_mtl == null)
+            _clear_mtl = new Material(Shader.Find("my_shader/ClearBrush") );
+
+        Graphics.Blit(null, paint_rt, _clear_mtl);
     }
 
-    /*
-    int Clamping(int x, int edage_x, int edage_y)
+    //更新笔刷材质
+    private void UpdateBrushMaterial()
     {
-        if (x <= edage_x) x = edage_x;
-        if (x >= edage_y) x = edage_y;
-        return x;
+        _paint_mtl = new Material(Shader.Find("my_shader/PaintBrush") );
+        _paint_mtl.SetColor("_color", _paintColor);
+        _paint_mtl.SetFloat("_paint_size", _brushSize);
+        _paint_mtl.SetFloat("_paint_stength", _brushStength);
     }
 
-    Color Lerp(Color one, Color two, float factor)
+    //插点
+    private void LerpPaint(Vector2 point)
     {
-        Color output = new Color();
-        output.r = Mathf.Lerp(one.r, two.r, factor);
-        output.g = Mathf.Lerp(one.g, two.g, factor);
-        output.b = Mathf.Lerp(one.b, two.b, factor);
-        output.a = Mathf.Lerp(one.a, two.a, factor);
-        return output;
-    }
+        Paint(point);
 
-    void draw_texture_cpu(Vector2 mouse_pos)
-    {
-        int aim_x = (int)((Screen.width - mouse_pos.x) / Screen.width * rt_size_x);
-        int aim_y = (int)((Screen.height - mouse_pos.y) / Screen.height * rt_size_y);
+        if (last_point == Vector2.zero)
+        {
+            last_point = point;
+            return;
+        }
 
-        int half_size = (int)(paint_size / 2);
-        for (int x = -half_size; x <= half_size; x++)
-            for (int y = -half_size; y <= half_size; y++)
+        float dis = Vector2.Distance(point, last_point);
+        if (dis > _brushLerpSize)
+        {
+            Vector2 dir = (point - last_point).normalized;
+            int num = (int)(dis / _brushLerpSize);
+            for (int i = 0; i < num; i++)
             {
-                int tmp_x = aim_x + x;
-                int tmp_y = aim_y + y;
-
-                tmp_x = Clamping(tmp_x, 0, rt_size_x);
-                tmp_y = Clamping(tmp_y, 0, rt_size_y);
-
-
-                Color color = new Color(1.0f, 0.0f, 0.0f);
-                Color org_color = paint_tex.GetPixel(tmp_x, tmp_y);
-
-                float factor = (float)(Math.Sqrt(x * x + y * y) / half_size);
-                Color final_color = Lerp(color, org_color, factor);
-
-                paint_tex.SetPixel(tmp_x, tmp_y, color);
+                Vector2 newPoint = last_point + dir * (i + 1) * _brushLerpSize;
+                Paint(newPoint);
             }
-
-        Debug.Log(string.Format("get paint color: {0}, {1}", aim_x, aim_y));
-        paint_tex.Apply();
+        }
+        last_point = point;
     }
-    */
+
+    //画点
+    private void Paint(Vector2 point)
+    {
+        if (point.x < 0 || point.x > Screen.width || point.y < 0 || point.y > Screen.height)
+            return;
+
+        Vector2 uv = new Vector2(point.x / (float)Screen.width,
+            point.y / (float)Screen.height);
+        //Debug.Log(string.Format("get point data: {0} {1}\t {2} {3}", point.x, point.y, uv.x, uv.y));
+        _paint_mtl.SetVector("_UV", uv);
+        Graphics.Blit(paint_rt, paint_rt, _paint_mtl);
+    }
+
+    private float Remap(float value, float startValue, float enValue)
+    {
+        float returnValue = (value - 1.0f) / (100.0f - 1.0f);
+        returnValue = (enValue - startValue) * returnValue + startValue;
+        return returnValue;
+    }
 
     public virtual void after_draw_texture()
     {
@@ -356,23 +402,8 @@ public class paint_util: MonoBehaviour
     {
         if (Input.GetMouseButton(0))
         {
-            Vector2 now_point = Input.mousePosition;
-            if (last_point == Vector2.zero) last_point = now_point;
-            float dist = Vector2.Distance(now_point, last_point);
-            int step = (int)(dist / diffrence);
-            Vector2 dir = now_point - last_point;
-            dir.Normalize();
-
-            for (int i = 0; i < step; i++)
-            {
-                Vector2 aim_pos = last_point + dir * i;
-                draw_texture(aim_pos);
-            }
-
-            draw_texture(now_point);
+            LerpPaint(Input.mousePosition);
             after_draw_texture();
-
-            last_point = now_point;
         }
 
         if (Input.GetMouseButtonUp(0))
