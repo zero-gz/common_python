@@ -1,7 +1,9 @@
-#ifndef __COMMON_MTL_PART__
-#define __COMMON_MTL_PART__
-#include "common_var.cginc"
+#ifndef EFFECTS_INCLUDE
+#define EFFECTS_INCLUDE
 
+#include "common.cginc"
+
+//  TAæŠ€æ³•
 // effect color_tint
 /*
 sampler2D _id_tex;
@@ -41,13 +43,13 @@ uniform float _fresnel_scale;
 uniform float _fresnel_bias;
 uniform float _fresnel_power;
 
-// schlick½üËÆ¹«Ê½
+// schlickè¿‘ä¼¼å…¬å¼
 float fresnel_standard_node(float fresnel_scale, float3 V, float3 N)
 {
 	return fresnel_scale + (1.0 - fresnel_scale)*pow((1.0 - dot(V, N)), 5.0);
 }
 
-// Empricial½üËÆ¹«Ê½£¬ Õâ¸ö¿ØÖÆ±äÁ¿¸ü¶à£¬¿ÉÒÔ°ÑĞ§¹û×öµÄ¸üÈáºÍÒ»µã
+// Empricialè¿‘ä¼¼å…¬å¼ï¼Œ è¿™ä¸ªæ§åˆ¶å˜é‡æ›´å¤šï¼Œå¯ä»¥æŠŠæ•ˆæœåšçš„æ›´æŸ”å’Œä¸€ç‚¹
 float fresnel_simulate_node(float fresnel_bias, float fresnel_scale, float fresnel_power, float3 V, float3 N)
 {
 	return max(0.0, min(1.0, fresnel_bias + fresnel_scale * pow((1.0 - dot(V, N)), fresnel_power)) );
@@ -61,5 +63,4 @@ void effect_fresnel_color(v2f i, inout MaterialVars mtl, inout LightingVars data
 	mtl.albedo = lerp(mtl.albedo, _fresnel_color.rgb, float3(fresnel_factor, fresnel_factor, fresnel_factor) );
 }
 */
-
 #endif

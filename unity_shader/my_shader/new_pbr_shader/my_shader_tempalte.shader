@@ -19,10 +19,12 @@
 		//_emissive_mask_map("Emissive mask map", 2D) = "black" {}
 
 		//fresnel
+		/*
 		_fresnel_color("fresnel color", Color) = (0.0, 0.0, 0.0, 0.0)
 		_fresnel_scale("fresnel scale", Range(0, 1)) = 0.0
 		_fresnel_bias("fresnel bias", Range(-1, 1)) = 0.0
 		_fresnel_power("fresnel power", Range(0, 10)) = 5.0
+		*/
 	}
 	SubShader
 	{
@@ -50,28 +52,12 @@
 			#include "UnityCG.cginc"
 			#include "Lighting.cginc"
 			#include "AutoLight.cginc"
-			#include "common_var.cginc"
-			#include "common_mtl_part.cginc"
 
-			float Pow2(float c)
-			{
-				return c * c;
-			}
+			#include "common.cginc"
+			#include "brdf.cginc"
+			#include "gi_lighting.cginc"
 
-			#define PI 3.1415926
-			#define BLACK_COLOR float3(0.0, 0.0, 0.0)
-			#define WHITE_COLOR float3(1.0, 1.0, 1.0)
-			#define CHAOS 0.000001	
-
-			float3 gamma_correct_began(float3 input_color)
-			{
-				return input_color * input_color;
-			}
-
-			float3 gamma_correct_end(float3 input_color)
-			{
-				return sqrt(input_color);
-			}
+			#include "effects.cginc"
 
 			v2f vert (appdata v)
 			{
@@ -138,190 +124,22 @@
 
 				data.occlusion = mtl.occlusion;
 				data.shadow = UNITY_SHADOW_ATTENUATION(i, data.world_pos);
-				data.emissive = mtl.emissive;
+
+				data.base_vars.pos = i.pos;
+				data.base_vars.uv0 = i.uv;
 				return data;
 			}
 
-			LightingResult direct_blinnphone_lighting(LightingVars data)
+			void effect_modify_vars(inout MaterialVars mtl, inout LightingVars data)
 			{
-				LightingResult result;
-				result.lighting_diffuse = data.light_color*data.diffuse_color*max(dot(data.N, data.L), 0.0);
-				result.lighting_specular = data.light_color*data.f0*pow(max(dot(data.H, data.N), 0.0), 32) ;
-				return result;
+				//data.diffuse_color = float3(1.0,0.0,0.0);
 			}
 
-//   ##################################################################################################
-
-			float3 Diffuse_Lambert(float3 DiffuseColor)
-			{
-				return DiffuseColor * (1 / PI);
-			}
-
-			// GGX / Trowbridge-Reitz
-			// [Walter et al. 2007, "Microfacet models for refraction through rough surfaces"]
-			float D_GGX( float a2, float NoH )
-			{
-				float d = ( NoH * a2 - NoH ) * NoH + 1;	// 2 mad
-				return a2 / ( PI*d*d );					// 4 mul, 1 rcp
-			}
-
-			// Appoximation of joint Smith term for GGX
-			// [Heitz 2014, "Understanding the Masking-Shadowing Function in Microfacet-Based BRDFs"]
-			float Vis_SmithJointApprox( float a2, float NoV, float NoL )
-			{
-				float a = sqrt(a2);
-				float Vis_SmithV = NoL * ( NoV * ( 1 - a ) + a );
-				float Vis_SmithL = NoV * ( NoL * ( 1 - a ) + a );
-				return 0.5 * rcp( Vis_SmithV + Vis_SmithL );
-			}
-
-			// [Schlick 1994, "An Inexpensive BRDF Model for Physically-Based Rendering"]
-			float3 F_Schlick( float3 f0, float VoH )
-			{
-				float Fc = Pow5( 1 - VoH );
-				return Fc + f0*(1 - Fc);
-			}			
-
-			float3 SpecularGGX(LightingVars data)
-			{
-				float Roughness = data.roughness;
-				float NoH = max(saturate(dot(data.N, data.H)), CHAOS);
-				float NoL = max(saturate(dot(data.N, data.L)), CHAOS);
-				float NoV = max(saturate(dot(data.N, data.V)), CHAOS);
-				float VoH = max(saturate(dot(data.V, data.H)), CHAOS);
-
-				// mtl中存放的是 感知线性粗糙度（为了方便美术调整，所以值为实际值的sqrt)				
-				float use_roughness = max(Pow2(Roughness), 0.002);
-				float a2 = Pow2(use_roughness);
-				//float Energy = EnergyNormalization( a2, Context.VoH, AreaLight );
-				float Energy = 1.0;
-				
-				// Generalized microfacet specular
-				float D = D_GGX( a2, NoH ) * Energy;
-				float Vis = Vis_SmithJointApprox( a2, NoV, NoL);
-				float3 F = F_Schlick(data.f0, VoH);
-
-				return (D * Vis) * F;
-			}
-
-			LightingResult direct_isotropy_lighting(LightingVars data)
-			{
-				LightingResult result;
-
-				float NoL = max(dot(data.N, data.L), 0.0);
-				result.lighting_diffuse = (data.light_color*NoL) * Diffuse_Lambert(data.diffuse_color);
-				result.lighting_specular = (data.light_color*NoL) * SpecularGGX(data);
-				return result;
-			}
-
-//  ####################################################################################################
-			void init_result(inout LightingResult result)
-			{
-				result.lighting_diffuse = float3(0.0, 0.0, 0.0);
-				result.lighting_specular = float3(0.0, 0.0, 0.0);
-			}
-
-			float3 ibl_lighting_diffuse(LightingVars data)
-			{
-				return data.diffuse_color * ShadeSH9(float4(data.N, 1.0));
-			}
-
-			// Env BRDF Approx
-			float3 env_approx(LightingVars data)
-			{
-				float NoV = max(saturate(dot(data.N, data.V)), CHAOS);
-
-				float4 C0 = float4(-1.000f, -0.0275f, -0.572f,  0.022f);
-				float4 C1 = float4(1.000f,  0.0425f,  1.040f, -0.040f);
-				float2 C2 = float2(-1.040f,  1.040f);
-				float4 r = C0 * data.roughness + C1;
-				float a = min(r.x * r.x, exp2(-9.28f * NoV)) * r.x + r.y;
-				float2 ab = C2 * a + r.zw;
-
-				return data.f0*ab.x + float3(ab.y, ab.y, ab.y);
-			}			
-
-			float3 ibl_lighting_specular(LightingVars data)
-			{
-				// ibl specular part1
-				float mip_roughness = data.roughness * (1.7 - 0.7 * data.roughness);
-				float3 reflectVec = reflect(-data.V, data.N);
-
-				half mip = mip_roughness * UNITY_SPECCUBE_LOD_STEPS;
-				half4 rgbm = UNITY_SAMPLE_TEXCUBE_LOD(unity_SpecCube0, reflectVec, mip);
-
-				float3 iblSpecular = DecodeHDR(rgbm, unity_SpecCube0_HDR);
-
-				// ibl specular part2
-				float3 brdf_factor = env_approx(data);
-
-				return iblSpecular*brdf_factor;
-			}
-
-			float3 lightmap_lighting_diffuse(LightingVars data)
-			{
-				float3 lightmap_baked = float3(0.0, 0.0, 0.0);
-				float3 lightmap_realtime = float3(0.0, 0.0, 0.0);
-				#if defined(LIGHTMAP_ON)
-					// Baked lightmaps
-					half4 bakedColorTex = UNITY_SAMPLE_TEX2D(unity_Lightmap, data.lightmap_uv.xy);
-					half3 bakedColor = DecodeLightmap(bakedColorTex);
-
-					#ifdef DIRLIGHTMAP_COMBINED
-						fixed4 bakedDirTex = UNITY_SAMPLE_TEX2D_SAMPLER (unity_LightmapInd, unity_Lightmap, data.lightmap_uv.xy);
-						lightmap_baked += DecodeDirectionalLightmap (bakedColor, bakedDirTex, data.N);
-					#else
-						lightmap_baked += bakedColor;	
-					#endif
-				#endif
-
-				#ifdef DYNAMICLIGHTMAP_ON
-					// Dynamic lightmaps
-					fixed4 realtimeColorTex = UNITY_SAMPLE_TEX2D(unity_DynamicLightmap, data.lightmap_uv.zw);
-					half3 realtimeColor = DecodeRealtimeLightmap (realtimeColorTex);
-
-					#ifdef DIRLIGHTMAP_COMBINED
-						half4 realtimeDirTex = UNITY_SAMPLE_TEX2D_SAMPLER(unity_DynamicDirectionality, unity_DynamicLightmap, data.lightmap_uv.zw);
-						lightmap_realtime += DecodeDirectionalLightmap (realtimeColor, realtimeDirTex, data.N);
-					#else
-						lightmap_realtime += realtimeColor;
-					#endif
-				#endif
-
-				return (lightmap_baked + lightmap_realtime)*data.diffuse_color;
-			}
-
-
-			LightingResult gi_lighting(LightingVars data)
-			{
-				LightingResult result;
-				init_result(result);
-				
-				#ifdef LIGHTPROBE_SH
-					result.lighting_diffuse += ibl_lighting_diffuse(data);
-				#endif
-
-				#ifdef UNITY_SPECCUBE_BOX_PROJECTION
-					result.lighting_specular += ibl_lighting_specular(data);
-				#endif	
-
-				#if defined(LIGHTMAP_ON) || defined(DYNAMICLIGHTMAP_ON)
-					result.lighting_diffuse += lightmap_lighting_diffuse(data);
-				#endif
-
-				return result;
-			}
-
-
-//  #####################################################################################################
 			fixed4 frag (v2f i) : SV_Target
 			{
 				MaterialVars mtl = gen_material_vars(i);
 				LightingVars data = gen_lighting_vars(i, mtl);
-				//effect_color_tint(i, mtl, data);
-				//effect_emissive(i, mtl, data);
-				//effect_fresnel_color(i, mtl, data);
-
+				effect_color_tint(i, mtl, data);
 				data = gen_lighting_vars(i, mtl);
 
 				// lighting part
@@ -337,7 +155,7 @@
 				//GI的处理
 				LightingResult gi_result = gi_lighting(data);
 
-				final_color = final_color + (gi_result.lighting_diffuse + gi_result.lighting_specular)*data.occlusion + data.emissive;
+				final_color = final_color + (gi_result.lighting_diffuse + gi_result.lighting_specular)*data.occlusion;
 
 				// sample the texture
 				return fixed4(final_color, 1.0);
