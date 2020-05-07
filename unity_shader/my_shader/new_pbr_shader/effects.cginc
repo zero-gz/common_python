@@ -63,4 +63,39 @@ void effect_fresnel_color(v2f i, inout MaterialVars mtl, inout LightingVars data
 	mtl.albedo = lerp(mtl.albedo, _fresnel_color.rgb, float3(fresnel_factor, fresnel_factor, fresnel_factor) );
 }
 */
+
+// effect energy 
+sampler2D _energy_tex;
+uniform float4 _energy_tex_ST;
+sampler2D _mask_tex;
+uniform float _speed_x;
+uniform float _speed_y;
+uniform float _energy_strength;
+
+// 这种默认的是UV空间的，这种依赖uv空间的东西，主要就是美术展UV的时候有限制
+void effect_energy(v2f i, inout MaterialVars mtl, inout LightingVars data)
+{
+	float2 new_uv = i.uv + float2(_speed_x, _speed_y)*_Time.x;
+	new_uv = new_uv * _energy_tex_ST.xy + _energy_tex_ST.zw;
+	float3 energy_color = tex2D(_energy_tex, new_uv).rgb;
+	float mask_value = tex2D(_mask_tex, i.uv).r;
+
+	mtl.albedo = mtl.albedo + energy_color * mask_value*_energy_strength;
+}
+
+uniform float3 _pos_scale;
+
+//来一个世界空间的,x,y映射，这里有个技巧，就是不使用bounding_box作除法转到0-1范围，直接拿一个 pos_scale就可以了，这个效果可能不太可控，主要是那个scale不太好控制
+void effect_energy_model_space(v2f i, inout MaterialVars mtl, inout LightingVars data)
+{
+	float3 now_pos = i.world_pos*_pos_scale.xyz + float3(_speed_x, _speed_y, 0.0)*_Time.x;
+	float2 new_uv = now_pos.xy;
+
+	float3 energy_color = tex2D(_energy_tex, new_uv).rgb;
+	float mask_value = tex2D(_mask_tex, i.uv).r;
+
+	mtl.albedo = mtl.albedo + energy_color * mask_value*_energy_strength;
+}
+
+
 #endif

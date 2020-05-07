@@ -25,6 +25,14 @@
 		_fresnel_bias("fresnel bias", Range(-1, 1)) = 0.0
 		_fresnel_power("fresnel power", Range(0, 10)) = 5.0
 		*/
+
+		//energy
+		_energy_tex("energy tex", 2D) = "black" {}
+		_mask_tex("mask tex", 2D) = "white" {}
+		_speed_x("speed X", Float) = 0.0
+		_speed_y("speed Y", Float) = 0.0
+		_energy_strength("energy strength", Range(0.1, 10) ) = 1.0
+		_pos_scale("pos scale value", Vector) = (1.0, 1.0, 1.0, 0.0)
 	}
 	SubShader
 	{
@@ -139,7 +147,9 @@
 			{
 				MaterialVars mtl = gen_material_vars(i);
 				LightingVars data = gen_lighting_vars(i, mtl);
-				effect_color_tint(i, mtl, data);
+				//effect_color_tint(i, mtl, data);
+				//effect_energy(i, mtl, data);
+				effect_energy_model_space(i, mtl, data);
 				data = gen_lighting_vars(i, mtl);
 
 				// lighting part
@@ -157,6 +167,7 @@
 
 				final_color = final_color + (gi_result.lighting_diffuse + gi_result.lighting_specular)*data.occlusion;
 
+				//final_color = abs(i.pos)/3.0f;
 				// sample the texture
 				return fixed4(final_color, 1.0);
 			}
