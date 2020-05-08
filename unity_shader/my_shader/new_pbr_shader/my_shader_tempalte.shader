@@ -27,12 +27,26 @@
 		*/
 
 		//energy
+		/*
 		_energy_tex("energy tex", 2D) = "black" {}
 		_mask_tex("mask tex", 2D) = "white" {}
 		_speed_x("speed X", Float) = 0.0
 		_speed_y("speed Y", Float) = 0.0
 		_energy_strength("energy strength", Range(0.1, 10) ) = 1.0
 		_pos_scale("pos scale value", Vector) = (1.0, 1.0, 1.0, 0.0)
+		*/
+
+		//bump
+		/*
+		_bump_tex("bump tex", 2D) = "black" {}
+		_bump_scale("bump scale", Range(-3, 3)) = 1.0
+		_bump_tex_size("bump tex size", Vector) = (512, 512, 0, 0)
+		*/
+
+		// distortion
+		_distortion_tex("distortion tex", 2D) = "black" {}
+		_speeds("speeds", Vector) = (0.0, 0.0, 0.0, 0.0)
+		_distortion_strength("distortion strength", Range(0.0, 10.0)) = 0.0
 	}
 	SubShader
 	{
@@ -138,18 +152,16 @@
 				return data;
 			}
 
-			void effect_modify_vars(inout MaterialVars mtl, inout LightingVars data)
-			{
-				//data.diffuse_color = float3(1.0,0.0,0.0);
-			}
-
 			fixed4 frag (v2f i) : SV_Target
 			{
 				MaterialVars mtl = gen_material_vars(i);
 				LightingVars data = gen_lighting_vars(i, mtl);
 				//effect_color_tint(i, mtl, data);
 				//effect_energy(i, mtl, data);
-				effect_energy_model_space(i, mtl, data);
+				//effect_energy_model_space(i, mtl, data);
+				//effect_bump(i, mtl, data);
+				effect_distortion(i, mtl, data);
+
 				data = gen_lighting_vars(i, mtl);
 
 				// lighting part

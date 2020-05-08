@@ -64,6 +64,7 @@ void effect_fresnel_color(v2f i, inout MaterialVars mtl, inout LightingVars data
 }
 */
 
+/*
 // effect energy 
 sampler2D _energy_tex;
 uniform float4 _energy_tex_ST;
@@ -96,6 +97,50 @@ void effect_energy_model_space(v2f i, inout MaterialVars mtl, inout LightingVars
 
 	mtl.albedo = mtl.albedo + energy_color * mask_value*_energy_strength;
 }
+*/
 
+/*
+sampler2D _bump_tex;
+uniform float _bump_scale;
+float4 _bump_tex_size;
+
+// bump贴图
+void effect_bump(v2f i, inout MaterialVars mtl, inout LightingVars data)
+{
+	float2 tex_size = float2(1.0f, 1.0f) / _bump_tex_size.xy;
+
+	float2 uv_left = i.uv - float2(tex_size.x, 0.0);
+	float2 uv_right = i.uv + float2(tex_size.x, 0.0);
+
+	float2 uv_bottom = i.uv - float2(0.0, tex_size.y);
+	float2 uv_top = i.uv + float2(0.0, tex_size.y);
+
+	float delta_x = tex2D(_bump_tex, uv_left).r - tex2D(_bump_tex, uv_right).r;
+	float delta_y = tex2D(_bump_tex, uv_bottom).r - tex2D(_bump_tex, uv_top).r;
+
+	mtl.normal = normalize(float3(delta_x*_bump_scale, delta_y*_bump_scale, 1.0) );
+}
+*/
+
+sampler2D _distortion_tex;
+uniform float4 _distortion_tex_ST;
+uniform float2 _speeds;
+uniform float _distortion_strength;
+
+// 扰动UV贴图
+void effect_distortion(v2f i, inout MaterialVars mtl, inout LightingVars data)
+{
+	float2 aim_uv = i.uv*_distortion_tex_ST.xy + _speeds *_Time.x + _distortion_tex_ST.zw;
+	float4 distortion_value = tex2D(_distortion_tex, aim_uv);
+	//主要是这里，需要把相应的范围转换到 -1~1范围内
+	distortion_value = distortion_value * 2.0 - 1.0;
+
+	float2 new_uv = i.uv + distortion_value.xy * _distortion_strength;
+	mtl.albedo = tex2D(_albedo_tex, new_uv).rgb;
+}
+
+// 溶解贴图
+
+// 混合多项material
 
 #endif
