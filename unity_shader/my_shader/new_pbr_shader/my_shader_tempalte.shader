@@ -44,9 +44,17 @@
 		*/
 
 		// distortion
+		/*
 		_distortion_tex("distortion tex", 2D) = "black" {}
 		_speeds("speeds", Vector) = (0.0, 0.0, 0.0, 0.0)
 		_distortion_strength("distortion strength", Range(0.0, 10.0)) = 0.0
+		*/
+
+		// dissolved
+		_dissolved_tex("dissolved tex", 2D) = "white" {}
+		_alpha_ref("alpha ref", Range(0,1)) = 0.0
+		_alpha_width("alpha width", Range(0,1)) = 0.0
+		[HDR]_highlight_color("highlight color", Color) = (0.0, 0.0, 0.0, 0.0)
 	}
 	SubShader
 	{
@@ -109,14 +117,15 @@
 			MaterialVars gen_material_vars(v2f i)
 			{
 				MaterialVars mtl;
-				mtl.albedo =  tex2D(_albedo_tex, i.uv).rgb;
+				float4 albedo_color =  tex2D(_albedo_tex, i.uv);
+				mtl.albedo = albedo_color.rgb;
 
 				float3 normal_color = tex2D(_normal_tex, i.uv).rgb;
 				mtl.normal = normal_color*2.0 - 1.0;
 				mtl.roughness = tex2D(_mix_tex, i.uv).g; //_roughness;
 				mtl.metallic = tex2D(_mix_tex, i.uv).r; //_metallic;
 				mtl.emissive = _emissive;
-				mtl.opacity = 1.0;
+				mtl.opacity = albedo_color.a;
 				mtl.occlusion = 1.0;
 
 				return mtl;
@@ -160,7 +169,8 @@
 				//effect_energy(i, mtl, data);
 				//effect_energy_model_space(i, mtl, data);
 				//effect_bump(i, mtl, data);
-				effect_distortion(i, mtl, data);
+				//effect_distortion(i, mtl, data);
+				effect_dissovle(i, mtl, data);
 
 				data = gen_lighting_vars(i, mtl);
 
@@ -177,11 +187,11 @@
 				//GI的处理
 				LightingResult gi_result = gi_lighting(data);
 
-				final_color = final_color + (gi_result.lighting_diffuse + gi_result.lighting_specular)*data.occlusion;
+				final_color = final_color + (gi_result.lighting_diffuse + gi_result.lighting_specular)*data.occlusion + mtl.emissive;
 
 				//final_color = abs(i.pos)/3.0f;
 				// sample the texture
-				return fixed4(final_color, 1.0);
+				return fixed4(final_color, mtl.opacity);
 			}
 			ENDCG
 		}

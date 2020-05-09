@@ -122,6 +122,7 @@ void effect_bump(v2f i, inout MaterialVars mtl, inout LightingVars data)
 }
 */
 
+/*
 sampler2D _distortion_tex;
 uniform float4 _distortion_tex_ST;
 uniform float2 _speeds;
@@ -138,9 +139,27 @@ void effect_distortion(v2f i, inout MaterialVars mtl, inout LightingVars data)
 	float2 new_uv = i.uv + distortion_value.xy * _distortion_strength;
 	mtl.albedo = tex2D(_albedo_tex, new_uv).rgb;
 }
+*/
+
+sampler2D _dissolved_tex;
+uniform float _alpha_ref;
+uniform float _alpha_width;
+uniform float4 _highlight_color;
 
 // 溶解贴图
+void effect_dissovle(v2f i, inout MaterialVars mtl, inout LightingVars data)
+{
+	float dissolved_alpha = tex2D(_dissolved_tex, i.uv).r;
 
-// 混合多项material
+	float diff_alpha = dissolved_alpha - _alpha_ref;
+
+	if (diff_alpha < 0.0f)
+		discard;
+
+	if (diff_alpha <= _alpha_width)
+		mtl.emissive = _highlight_color.rgb;
+}
+
+// 混合多项material  这个感觉在UE中做实验会比较方便一些
 
 #endif
