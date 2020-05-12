@@ -72,14 +72,40 @@ float3 SpecularGGX(LightingVars data)
     return (D * Vis) * F;
 }
 
-LightingResult direct_isotropy_lighting(LightingVars data)
+LightingResult isotropy_lighting(LightingVars data)
 {
     LightingResult result;
 
     float NoL = max(dot(data.N, data.L), 0.0);
-    result.lighting_diffuse = (data.light_color*NoL) * Diffuse_Lambert(data.diffuse_color);
+	// unity的问题，乘以了pi
+    result.lighting_diffuse = (data.light_color*NoL) * Diffuse_Lambert(data.diffuse_color)*PI;
     result.lighting_specular = (data.light_color*NoL) * SpecularGGX(data);
+	result.lighting_scatter = float3(0.0, 0.0, 0.0);
     return result;
 }
 
+LightingResult subsurface_lighting(LightingVars data)
+{
+	LightingResult result;
+
+	float NoL = max(dot(data.N, data.L), 0.0);
+	result.lighting_diffuse = (data.light_color*NoL) * Diffuse_Lambert(data.diffuse_color)*PI;
+	//加上反向的透射部分
+	float trans_dot = pow(saturate(dot(data.V, -data.L)), _sss_power)*_sss_strength*data.opacity;
+	result.lighting_scatter = trans_dot * data.sss_color;
+
+	result.lighting_specular = (data.light_color*NoL) * SpecularGGX(data);
+	return result;
+}
+
+LightingResult direct_lighting(LightingVars data)
+{
+	#if _LIGHTING_TYPE_DEFAULT
+		return isotropy_lighting(data);
+	#elif _LIGHTING_TYPE_SUBSURFACE
+		return subsurface_lighting(data);
+	#else
+		return isotropy_lighting(data);
+	#endif
+}
 #endif

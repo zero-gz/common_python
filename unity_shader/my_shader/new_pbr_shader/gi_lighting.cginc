@@ -15,6 +15,7 @@ void init_result(inout LightingResult result)
 {
     result.lighting_diffuse = float3(0.0, 0.0, 0.0);
     result.lighting_specular = float3(0.0, 0.0, 0.0);
+	result.lighting_scatter = float3(0.0, 0.0, 0.0);
 }
 
 float3 ibl_lighting_diffuse(LightingVars data)
@@ -88,7 +89,7 @@ float3 lightmap_lighting_diffuse(LightingVars data)
 }
 
 
-LightingResult gi_lighting(LightingVars data)
+LightingResult gi_isotropy_lighting(LightingVars data)
 {
     LightingResult result;
     init_result(result);
@@ -106,6 +107,11 @@ LightingResult gi_lighting(LightingVars data)
     #endif
 
     return result;
+}
+
+LightingResult gi_lighting(LightingVars data)
+{
+	return gi_isotropy_lighting(data);
 }
 
 #endif

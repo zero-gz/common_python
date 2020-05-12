@@ -5,67 +5,76 @@
 		_albedo_tex ("albedo texture", 2D) = "white" {}
 		_normal_tex ("normal texture", 2D) = "bump"{}
 		_mix_tex ("mix texture (R metallic, G roughness)", 2D) = "black" {}
-		[HDR]_emissive ("Emissive", Color) = (0.0, 0.0, 0.0, 0.0)
+		[HDR]_emissive("Emissive", Color) = (0.0, 0.0, 0.0, 0.0)
+		[KeywordEnum(DEFAULT, SUBSURFACE)] _LIGHTING_TYPE("shading model", Float) = 0
 
-		//color_tint
-		/*
-		_id_tex("tint mask texture", 2D) = "black" {}
-		_color_tint1("color tint1", Color) = (0.0, 0.0, 0.0, 0.0)
-		_color_tint2("color tint2", Color) = (0.0, 0.0, 0.0, 0.0)
-		_color_tint3("color tint3", Color) = (0.0, 0.0, 0.0, 0.0)
-		*/
-		
-		//emissive
-		//_emissive_mask_map("Emissive mask map", 2D) = "black" {}
+			//在开启 SUBSURFACE的情况下,_sss_color作为次表面散射的色彩,而_albedo_tex.a作为厚度
+			_sss_color("SSS color", Color) = (0.0, 0.0, 0.0, 1.0)
+				_sss_strength("sss strength", Range(0,100)) = 0.0
 
-		//fresnel
-		/*
-		_fresnel_color("fresnel color", Color) = (0.0, 0.0, 0.0, 0.0)
-		_fresnel_scale("fresnel scale", Range(0, 1)) = 0.0
-		_fresnel_bias("fresnel bias", Range(-1, 1)) = 0.0
-		_fresnel_power("fresnel power", Range(0, 10)) = 5.0
-		*/
+			_sss_power("sss power", Range(0, 100)) = 5.0
 
-		//energy
-		/*
-		_energy_tex("energy tex", 2D) = "black" {}
-		_mask_tex("mask tex", 2D) = "white" {}
-		_speed_x("speed X", Float) = 0.0
-		_speed_y("speed Y", Float) = 0.0
-		_energy_strength("energy strength", Range(0.1, 10) ) = 1.0
-		_pos_scale("pos scale value", Vector) = (1.0, 1.0, 1.0, 0.0)
-		*/
+			//color_tint
+			/*
+			_id_tex("tint mask texture", 2D) = "black" {}
+			_color_tint1("color tint1", Color) = (0.0, 0.0, 0.0, 0.0)
+			_color_tint2("color tint2", Color) = (0.0, 0.0, 0.0, 0.0)
+			_color_tint3("color tint3", Color) = (0.0, 0.0, 0.0, 0.0)
+			*/
 
-		//bump
-		/*
-		_bump_tex("bump tex", 2D) = "black" {}
-		_bump_scale("bump scale", Range(-3, 3)) = 1.0
-		_bump_tex_size("bump tex size", Vector) = (512, 512, 0, 0)
-		*/
+			//emissive
+			//_emissive_mask_map("Emissive mask map", 2D) = "black" {}
 
-		// distortion
-		/*
-		_distortion_tex("distortion tex", 2D) = "black" {}
-		_speeds("speeds", Vector) = (0.0, 0.0, 0.0, 0.0)
-		_distortion_strength("distortion strength", Range(0.0, 10.0)) = 0.0
-		*/
+			//fresnel
+			/*
+			_fresnel_color("fresnel color", Color) = (0.0, 0.0, 0.0, 0.0)
+			_fresnel_scale("fresnel scale", Range(0, 1)) = 0.0
+			_fresnel_bias("fresnel bias", Range(-1, 1)) = 0.0
+			_fresnel_power("fresnel power", Range(0, 10)) = 5.0
+			*/
 
-		// dissolved
-		_dissolved_tex("dissolved tex", 2D) = "white" {}
-		_alpha_ref("alpha ref", Range(0,1)) = 0.0
-		_alpha_width("alpha width", Range(0,1)) = 0.0
-		[HDR]_highlight_color("highlight color", Color) = (0.0, 0.0, 0.0, 0.0)
+			//energy
+			/*
+			_energy_tex("energy tex", 2D) = "black" {}
+			_mask_tex("mask tex", 2D) = "white" {}
+			_speed_x("speed X", Float) = 0.0
+			_speed_y("speed Y", Float) = 0.0
+			_energy_strength("energy strength", Range(0.1, 10) ) = 1.0
+			_pos_scale("pos scale value", Vector) = (1.0, 1.0, 1.0, 0.0)
+			*/
+
+			//bump
+			/*
+			_bump_tex("bump tex", 2D) = "black" {}
+			_bump_scale("bump scale", Range(-3, 3)) = 1.0
+			_bump_tex_size("bump tex size", Vector) = (512, 512, 0, 0)
+			*/
+
+			// distortion
+			/*
+			_distortion_tex("distortion tex", 2D) = "black" {}
+			_speeds("speeds", Vector) = (0.0, 0.0, 0.0, 0.0)
+			_distortion_strength("distortion strength", Range(0.0, 10.0)) = 0.0
+			*/
+
+			// dissolved
+			/*
+			_dissolved_tex("dissolved tex", 2D) = "white" {}
+			_alpha_ref("alpha ref", Range(0,1)) = 0.0
+			_alpha_width("alpha width", Range(0,1)) = 0.0
+			[HDR]_highlight_color("highlight color", Color) = (0.0, 0.0, 0.0, 0.0)
+			*/
 	}
-	SubShader
-	{
-		// 这里的tags要这么写，不然阴影会有问题
-		Tags { "RenderType"="Opaque" "Queue"="Geometry"}
-		LOD 100
-
-		Pass
+		SubShader
 		{
+			// 这里的tags要这么写，不然阴影会有问题
+			Tags { "RenderType" = "Opaque" "Queue" = "Geometry"}
+			LOD 100
+
+			Pass
+			{
 			// 这个ForwardBase非常重要，不加这个， 光照取的结果都会跳变……
-			Tags {"LightMode"="ForwardBase"}
+			Tags {"LightMode" = "ForwardBase"}
 			CGPROGRAM
 			#pragma target 3.0
 			#pragma vertex vert
@@ -78,6 +87,9 @@
 
 			#pragma multi_compile_fwdbase
 			#pragma enable_d3d11_debug_symbols
+			#pragma shader_feature _LIGHTING_TYPE_DEFAULT _LIGHTING_TYPE_SUBSURFACE
+
+			float _sss_strength;
 			
 			#include "UnityCG.cginc"
 			#include "Lighting.cginc"
@@ -127,6 +139,7 @@
 				mtl.emissive = _emissive;
 				mtl.opacity = albedo_color.a;
 				mtl.occlusion = 1.0;
+				mtl.sss_color = _sss_color.rgb;
 
 				return mtl;
 			}
@@ -145,6 +158,9 @@
 				data.f0 = lerp(float3(0.04, 0.04, 0.04), mtl.albedo, mtl.metallic);
 				data.roughness = mtl.roughness;
 				data.metallic = mtl.metallic;
+				data.sss_color = mtl.sss_color;
+				data.opacity = mtl.opacity;
+
 				data.light_color = _LightColor0.rgb;
 
 				#if defined(LIGHTMAP_ON) || defined(DYNAMICLIGHTMAP_ON)
@@ -170,26 +186,21 @@
 				//effect_energy_model_space(i, mtl, data);
 				//effect_bump(i, mtl, data);
 				//effect_distortion(i, mtl, data);
-				effect_dissovle(i, mtl, data);
+				//effect_dissovle(i, mtl, data);
 
 				data = gen_lighting_vars(i, mtl);
 
 				// lighting part
 				//LightingResult dir_result = direct_blinnphone_lighting(data);
-				LightingResult dir_result = direct_isotropy_lighting(data);
+				LightingResult dir_result = direct_lighting(data);
 				
-				fixed3 final_color = dir_result.lighting_diffuse + dir_result.lighting_specular;
-				final_color *= data.shadow;
-				
-				// unity的问题，乘以了pi
-				final_color = final_color * PI;
+				fixed3 final_color = (dir_result.lighting_diffuse + dir_result.lighting_specular)*data.shadow + dir_result.lighting_scatter;
 
 				//GI的处理
 				LightingResult gi_result = gi_lighting(data);
 
 				final_color = final_color + (gi_result.lighting_diffuse + gi_result.lighting_specular)*data.occlusion + mtl.emissive;
 
-				//final_color = abs(i.pos)/3.0f;
 				// sample the texture
 				return fixed4(final_color, mtl.opacity);
 			}

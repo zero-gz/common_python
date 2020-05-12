@@ -43,7 +43,8 @@ sampler2D _mix_tex;
 float _roughness;
 float _metallic;
 float3 _emissive;
-
+float4 _sss_color;
+float _sss_power;
 
 struct BaseVars {
     float3 pos;
@@ -62,6 +63,9 @@ struct LightingVars {
     float3 f0;
     float roughness;
     float metallic;
+	float opacity;
+
+	float3 sss_color;
 
     float3 light_color;
 
@@ -84,11 +88,14 @@ struct MaterialVars {
     float3 emissive;
     float opacity;
     float occlusion;
+
+	float3 sss_color;
 };
 
 struct LightingResult{
     float3 lighting_diffuse;
     float3 lighting_specular;
+	float3 lighting_scatter;
 };
 
 float Pow2(float c)
@@ -105,6 +112,5 @@ float3 gamma_correct_end(float3 input_color)
 {
     return sqrt(input_color);
 }
-           
 
 #endif
