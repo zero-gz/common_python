@@ -72,6 +72,10 @@ float3 SpecularGGX(LightingVars data)
     return (D * Vis) * F;
 }
 
+// Specular term
+// HACK: theoretically we should divide diffuseTerm by Pi and not multiply specularTerm!
+// BUT 1) that will make shader look significantly darker than Legacy ones
+// and 2) on engine side "Non-important" lights have to be divided by Pi too in cases when they are injected into ambient SH
 LightingResult isotropy_lighting(LightingVars data)
 {
     LightingResult result;
@@ -79,7 +83,7 @@ LightingResult isotropy_lighting(LightingVars data)
     float NoL = max(dot(data.N, data.L), 0.0);
 	// unity的问题，乘以了pi
     result.lighting_diffuse = (data.light_color*NoL) * Diffuse_Lambert(data.diffuse_color)*PI;
-    result.lighting_specular = (data.light_color*NoL) * SpecularGGX(data);
+    result.lighting_specular = (data.light_color*NoL) * SpecularGGX(data)*PI;
 	result.lighting_scatter = float3(0.0, 0.0, 0.0);
     return result;
 }
@@ -90,11 +94,40 @@ LightingResult subsurface_lighting(LightingVars data)
 
 	float NoL = max(dot(data.N, data.L), 0.0);
 	result.lighting_diffuse = (data.light_color*NoL) * Diffuse_Lambert(data.diffuse_color)*PI;
+	result.lighting_specular = (data.light_color*NoL) * SpecularGGX(data)*PI;
+
 	//加上反向的透射部分
 	float trans_dot = pow(saturate(dot(data.V, -data.L)), _sss_power)*_sss_strength*data.opacity;
 	result.lighting_scatter = trans_dot * data.sss_color;
+	
+	/*
+	data.opacity = 1.0-_sss_strength;
+	float in_scatter = pow(saturate(dot(data.V, -data.L) ), 12.0) * lerp(3.0, 0.1, data.opacity);
+	float normal_contribution = dot(data.N, data.H)*data.opacity + 1.0 - data.opacity;
+	float back_scatter = normal_contribution / (2.0*PI);
+	result.lighting_scatter = data.sss_color*lerp(back_scatter, 1.0, in_scatter);
+	*/	
+	return result;
+}
 
-	result.lighting_specular = (data.light_color*NoL) * SpecularGGX(data);
+LightingResult skin_lighting(LightingVars data)
+{
+	LightingResult result;
+
+	float curvature = length(fwidth(data.N)) / length(fwidth(data.world_pos));
+
+	float NoL = max(dot(data.N, data.L), 0.0);
+	float2 preinteger_uv;
+	preinteger_uv.x = dot(data.N, data.L)*0.5 + 0.5;
+	preinteger_uv.y = curvature * dot(data.light_color, float3(0.22, 0.707, 0.071));
+	float3 brdf = tex2D(_preinteger_tex, preinteger_uv).rgb;
+
+	result.lighting_diffuse = (data.light_color*lerp(NoL, brdf, data.thickness)) * Diffuse_Lambert(data.diffuse_color)*PI;
+	result.lighting_specular = (data.light_color*NoL) * SpecularGGX(data)*PI;
+
+	//加上反向的透射部分
+	float trans_dot = pow(saturate(dot(data.V, -data.L)), _sss_power)*_sss_strength*data.thickness;
+	result.lighting_scatter = float3(0.0f, 0.0f, 0.0f); // trans_dot * data.sss_color;
 	return result;
 }
 
@@ -104,6 +137,8 @@ LightingResult direct_lighting(LightingVars data)
 		return isotropy_lighting(data);
 	#elif _LIGHTING_TYPE_SUBSURFACE
 		return subsurface_lighting(data);
+	#elif _LIGHTING_TYPE_SKIN
+		return skin_lighting(data);
 	#else
 		return isotropy_lighting(data);
 	#endif

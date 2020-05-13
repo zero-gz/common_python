@@ -6,13 +6,16 @@
 		_normal_tex ("normal texture", 2D) = "bump"{}
 		_mix_tex ("mix texture (R metallic, G roughness)", 2D) = "black" {}
 		[HDR]_emissive("Emissive", Color) = (0.0, 0.0, 0.0, 0.0)
-		[KeywordEnum(DEFAULT, SUBSURFACE)] _LIGHTING_TYPE("shading model", Float) = 0
+		[KeywordEnum(DEFAULT, SUBSURFACE, SKIN)] _LIGHTING_TYPE("shading model", Float) = 0
 
-			//在开启 SUBSURFACE的情况下,_sss_color作为次表面散射的色彩,而_albedo_tex.a作为厚度
+			//在开启 SUBSURFACE的情况下,_sss_color作为次表面散射的色彩
 			_sss_color("SSS color", Color) = (0.0, 0.0, 0.0, 1.0)
-				_sss_strength("sss strength", Range(0,100)) = 0.0
-
+			_sss_strength("sss strength", Range(0,100)) = 0.0
 			_sss_power("sss power", Range(0, 100)) = 5.0
+
+			//skin相关
+			_preinteger_tex("preinteger tex", 2D) = "white" {}
+			_sss_tex("sss tex", 2D) = "white" {}
 
 			//color_tint
 			/*
@@ -87,7 +90,7 @@
 
 			#pragma multi_compile_fwdbase
 			#pragma enable_d3d11_debug_symbols
-			#pragma shader_feature _LIGHTING_TYPE_DEFAULT _LIGHTING_TYPE_SUBSURFACE
+			#pragma shader_feature _LIGHTING_TYPE_DEFAULT _LIGHTING_TYPE_SUBSURFACE _LIGHTING_TYPE_SKIN
 
 			float _sss_strength;
 			
@@ -139,8 +142,12 @@
 				mtl.emissive = _emissive;
 				mtl.opacity = albedo_color.a;
 				mtl.occlusion = 1.0;
+
 				mtl.sss_color = _sss_color.rgb;
 
+				float4 sss_tex_data = tex2D(_sss_tex, i.uv);
+				mtl.thickness = sss_tex_data.r;
+				mtl.curvature = sss_tex_data.g;
 				return mtl;
 			}
 
@@ -159,6 +166,8 @@
 				data.roughness = mtl.roughness;
 				data.metallic = mtl.metallic;
 				data.sss_color = mtl.sss_color;
+				data.thickness = mtl.thickness;
+				data.curvature = mtl.curvature;
 				data.opacity = mtl.opacity;
 
 				data.light_color = _LightColor0.rgb;

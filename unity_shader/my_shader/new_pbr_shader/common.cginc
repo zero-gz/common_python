@@ -39,6 +39,8 @@ struct v2f
 sampler2D _albedo_tex;
 sampler2D _normal_tex;
 sampler2D _mix_tex;
+sampler2D _preinteger_tex;
+sampler2D _sss_tex;
 
 float _roughness;
 float _metallic;
@@ -65,8 +67,6 @@ struct LightingVars {
     float metallic;
 	float opacity;
 
-	float3 sss_color;
-
     float3 light_color;
 
     #if defined(LIGHTMAP_ON) || defined(DYNAMICLIGHTMAP_ON)
@@ -78,6 +78,12 @@ struct LightingVars {
     float shadow; // 遮蔽实时灯光
 
     BaseVars base_vars; //v2f中的一些关键变量
+
+	// subsurface color
+	float3 sss_color;
+	// skin
+	float thickness;
+	float curvature;
 };
 
 struct MaterialVars {
@@ -90,6 +96,8 @@ struct MaterialVars {
     float occlusion;
 
 	float3 sss_color;
+	float thickness;
+	float curvature;
 };
 
 struct LightingResult{
