@@ -1,13 +1,18 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEditor;
 
-public class integer_tex_gen : MonoBehaviour {
-	// Use this for initialization
-	void Start () {
-        //_gen_tex();
-        _gen_diffusion_profile();
-	}
+public class intergerSSSTool : ScriptableWizard
+{
+    public int tex_size = 256;
+    public string res_path = "Assets/Resources/";
+
+    void OnWizardUpdate()
+    {
+        helpString = "sss preinteger texture generator";
+        isValid = true;
+    }
 
     float Gaussian(float v, float r)
     {
@@ -31,6 +36,29 @@ public class integer_tex_gen : MonoBehaviour {
             Gaussian(0.5670f*sq, r) * factor4 +
             Gaussian(1.9900f*sq, r) * factor5 +
             Gaussian(7.4100f*sq, r) * factor6;
+    }
+
+    float GaussianOther(float v, float r)
+    {
+        return Mathf.Exp(-(r * r)/v);
+    }
+
+    Vector3 ScatterWithGaussOther(float r)
+    {
+        Vector3 factor1 = new Vector3(0.233f, 0.455f, 0.649f);
+        Vector3 factor2 = new Vector3(0.100f, 0.336f, 0.344f);
+        Vector3 factor3 = new Vector3(0.118f, 0.198f, 0.000f);
+        Vector3 factor4 = new Vector3(0.113f, 0.007f, 0.007f);
+        Vector3 factor5 = new Vector3(0.358f, 0.004f, 0.000f);
+        Vector3 factor6 = new Vector3(0.078f, 0.000f, 0.000f);
+
+        float sq = 1.0f; // 1.414f;
+        return GaussianOther(0.0064f * sq, r) * factor1 +
+            GaussianOther(0.0484f * sq, r) * factor2 +
+            GaussianOther(0.1870f * sq, r) * factor3 +
+            GaussianOther(0.5670f * sq, r) * factor4 +
+            GaussianOther(1.9900f * sq, r) * factor5 +
+            GaussianOther(7.4100f * sq, r) * factor6;
     }
 
     Vector3 integrateDiffuseScatteringOnRing(float cosTheta, float skinRadius, float inc)
@@ -60,7 +88,7 @@ public class integer_tex_gen : MonoBehaviour {
     void _gen_tex()
     {
         int width, height;
-        width = height = 256;
+        width = height = tex_size;
         Texture2D tex = new Texture2D(width, height);
        
         for(int j=0;j<height;j++)
@@ -80,13 +108,13 @@ public class integer_tex_gen : MonoBehaviour {
             }
 
         tex.Apply();
-        util.save_texture("Assets/Scenes/my_shader_template/preinteger.png", tex);
+        util.save_texture(res_path+"preinteger.png", tex);
     }
 
     void _gen_diffusion_profile()
     {
         int width, height;
-        width = height = 256;
+        width = height = tex_size;
         Texture2D tex = new Texture2D(width, height);
 
         for (int j = 0; j < height; j++)
@@ -97,17 +125,28 @@ public class integer_tex_gen : MonoBehaviour {
 
                 float radius = 2.0f * Mathf.Sqrt(Mathf.Pow(cosTheta - 0.5f, 2.0f) + Mathf.Pow(height_y - 0.5f, 2.0f));
 
-                Vector3 result = Scatter(radius);
+                Vector3 result = ScatterWithGaussOther(radius);
                 Color col = new Color(result.x, result.y, result.z);
                 tex.SetPixel(i, j, col);
             }
 
         tex.Apply();
-        util.save_texture("Assets/Scenes/my_shader_template/preinteger_diffusion_profile.png", tex);
+        util.save_texture(res_path+"preinteger_diffusion_profile.png", tex);
     }
 
-    // Update is called once per frame
-    void Update () {
-		
-	}
+    void OnWizardCreate()
+    {
+        _gen_tex();
+    }
+
+    private void OnWizardOtherButton()
+    {
+        _gen_diffusion_profile();
+    }
+
+    [MenuItem("Tools/create_integer_tex")]
+    static void create_integer_tex()
+    {
+        ScriptableWizard.DisplayWizard<intergerSSSTool>("皮肤SSS图片生成", "生成preinteger贴图", "生成diffusion profile贴图");
+    }
 }
