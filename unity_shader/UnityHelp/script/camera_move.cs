@@ -4,7 +4,8 @@ using UnityEngine;
 
 public class camera_move : MonoBehaviour
 {
-    public Vector3 cameraTarget;
+    public GameObject target;
+    public Vector3 target_pos;
     public Bounds targetRange = new Bounds(new Vector3(0, 0, 0), new Vector3(50, 50, 50));
     public Vector2 distanceRange = new Vector2(0, 200);
     //public Vector2 eulerXRange;
@@ -19,16 +20,21 @@ public class camera_move : MonoBehaviour
 
     [SerializeField]
     private float m_Distance;
-    private Vector3 m_Target;
     private Quaternion m_Rotation;
 
     void Start()
     {
-        m_Target = cameraTarget;
-        m_Distance = Vector3.Distance(transform.position, m_Target);
+        if (target)
+        {
+            target_pos = target.transform.position;
+            Vector3 look_forward = target.transform.forward;
+        }
+
         m_Rotation = transform.rotation;
 
-        transform.position = m_Target - transform.forward * m_Distance;
+        m_Distance = Vector3.Distance(transform.position, target_pos);
+
+        transform.position = target_pos - transform.forward * m_Distance;
     }
 
     void Update()
@@ -44,7 +50,7 @@ public class camera_move : MonoBehaviour
         }
         CameraScalling(_scrollWheelValue);
 
-        Vector3 camPos = m_Target - transform.forward * m_Distance;
+        Vector3 camPos = target_pos - transform.forward * m_Distance;
 
         transform.rotation = Quaternion.Lerp(transform.rotation, m_Rotation, Time.deltaTime * rotateLerpSpeed);
         transform.position = Vector3.Lerp(transform.position, camPos, Time.deltaTime * moveLerpSpeed);
@@ -52,11 +58,11 @@ public class camera_move : MonoBehaviour
 
     private void CameraMove()
     {
-        m_Target += (-Input.GetAxis("Mouse X") * transform.right - Input.GetAxis("Mouse Y") * transform.up) * Time.deltaTime * speedMove;
+        target_pos += (-Input.GetAxis("Mouse X") * transform.right - Input.GetAxis("Mouse Y") * transform.up) * Time.deltaTime * speedMove;
 
-        m_Target.x = Mathf.Clamp(m_Target.x, targetRange.min.x, targetRange.max.x);
-        m_Target.y = Mathf.Clamp(m_Target.y, targetRange.min.y, targetRange.max.y);
-        m_Target.z = Mathf.Clamp(m_Target.z, targetRange.min.z, targetRange.max.z);
+        target_pos.x = Mathf.Clamp(target_pos.x, targetRange.min.x, targetRange.max.x);
+        target_pos.y = Mathf.Clamp(target_pos.y, targetRange.min.y, targetRange.max.y);
+        target_pos.z = Mathf.Clamp(target_pos.z, targetRange.min.z, targetRange.max.z);
     }
 
     private void CameraScalling(float axis)
@@ -71,7 +77,9 @@ public class camera_move : MonoBehaviour
     private void CameraRotate()
     {
         Vector3 _rotation = transform.rotation.eulerAngles;
-        _rotation += new Vector3(-Input.GetAxis("Mouse Y"), Input.GetAxis("Mouse X"), 0) * Time.deltaTime * speedRotate;
+        Vector3 rotate_input = new Vector3(-Input.GetAxis("Mouse Y"), Input.GetAxis("Mouse X"), 0);
+        _rotation += rotate_input * Time.deltaTime * speedRotate;
+        Debug.Log(string.Format("get rotation {0}", rotate_input.ToString()));
 
         //_rotation.x = Mathf.Clamp(_rotation.x, eulerXRange.x, eulerXRange.y);
         //_rotation.y = Mathf.Clamp(_rotation.y, eulerYRange.x, eulerYRange.y);
