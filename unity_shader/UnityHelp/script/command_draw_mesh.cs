@@ -45,7 +45,8 @@ public class command_draw_mesh : MonoBehaviour {
         m_Camera.targetTexture = rt;
 
         m_CommandBuffer = new CommandBuffer();
-        m_Camera.AddCommandBuffer(CameraEvent.AfterImageEffectsOpaque, m_CommandBuffer);
+        m_CommandBuffer.name = "my draw pass";
+        m_Camera.AddCommandBuffer(CameraEvent.AfterForwardOpaque, m_CommandBuffer);
     }
 
     void DebugPanel()
@@ -65,8 +66,9 @@ public class command_draw_mesh : MonoBehaviour {
     {
         if (!mesh)
             return;
+        //Debug.Log("get draw mesh command!");
         //if (IsBoundsInCamera(mesh.bounds, m_Camera))
-        m_CommandBuffer.DrawMesh(mesh, matrix, m_ForceMaterial);
+        m_CommandBuffer.DrawMesh(mesh, matrix, m_ForceMaterial,0,0);
     }
 
     // Update is called once per frame
