@@ -1,35 +1,37 @@
-﻿Shader "my_test_shader/draw_graph"
+﻿Shader "my_shader/draw_graph"
 {
 	Properties{
-		_TextureWidth("_TextureWidth", Float) = 512.0
-		_TextureHeight("_TextureHeight", Float) = 512.0
-		_line_color("_line_color", Color) = (1.0, 0.0, 0.0, 1.0)
+		_tex_size("Tex Size", Float) = 512.0
+		_x_size("X size", Range(1, 20)) = 1.0
+		_y_size("Y size", Range(1, 20)) = 1.0
+		_line_color("line color", Color) = (1.0, 0.0, 0.0, 1.0)
+		_back_color("back color", Color) = (0.95, 0.95, 0.95, 1.0)
 	}
-		SubShader{
-			Tags { "RenderType" = "Opaque" }
-			LOD 200
 
-			Pass {
-				Tags { "LightMode" = "Always"}
-				ZTest Always
-				Cull Off
-				ZWrite Off
-				Blend Off
+	SubShader{
+		Tags { "RenderType" = "Opaque" }
+		LOD 200
 
-				CGPROGRAM
-					#pragma vertex vert
-					#pragma fragment frag
-					#pragma target 3.0
-					#pragma glsl
+		Pass {
+			Tags { "LightMode" = "Always"}
+			ZTest Always
+			Cull Off
+			ZWrite Off
+			Blend Off
 
-		// only compile for traditional desktop renderers to avoid strange warnings
-		#pragma only_renderers d3d9 d3d11 opengl glcore
+		CGPROGRAM
+		#pragma vertex vert
+		#pragma fragment frag
+		#pragma target 3.0
+		#pragma enable_d3d11_debug_symbols
+
 		#include "UnityCG.cginc"
 
-		//#include "./ComputeLookups.cginc"
-		float _TextureWidth;
-		float _TextureHeight;
+		float _tex_size;
+		float _x_size;
+		float _y_size;
 		float4 _line_color;
+		float4 _back_color;
 
 		struct v2f {
 			float4 pos : SV_POSITION;
@@ -43,39 +45,34 @@
 			return o;
 		}
 
-		float3 plot(float x) {
-				float r = x;
-				float3 profile = r * r;
-				return profile;
+		float3 plot(float tmp_x) {
+				float x = tmp_x * _x_size;
+				// 这里写计算公式
+				float y = sin(x);
+				// 公式结束
+				float y_tmp = (y/_y_size + 1.0)/2.0;
+				return float3(y_tmp, y_tmp, y_tmp);
 		}
 
 			float4 frag(v2f i) : COLOR {
-				float aspectRatio = (float)_TextureWidth / (float)_TextureHeight;
 				float x = i.uv.x;
 				float y = i.uv.y;
 
-				float pixelWidth = 1.0 / _TextureWidth;
-				float pixelHeight = 1.0 / _TextureHeight;
-
-				float strokeWidth = max(pixelWidth, pixelHeight);
-
-				float2 p = float2(x, y);
+				float pixelWidth = 1.0 / _tex_size;
+				float pixelHeight = 1.0 / _tex_size;
 
 				int samples = 4;
 				float2 step = float2(pixelWidth / samples * 2.0, pixelHeight / samples * 2.0);
 				float sum = 0.0;
 				for (int i = 0.0; i < samples; i++) {
 					for (int j = 0.0; j < samples; j++) {
-						float f = plot(p.x + i * step.x).rgb - (p.y + j * step.y);
+						float f = plot(x + i * step.x).rgb - (y + j * step.y);
 						sum += (f > 0.) ? 1 : -1;
 					}
 				}
 
-				float3 back_color = float3(0.95, 0.95, 0.95);
 				float alpha = 1.0 - abs(sum) / (samples*samples);
-				float3 color = lerp(back_color, _line_color.rgb, saturate(alpha));
-
-				//color = float3(y, y, y);
+				float3 color = lerp(_back_color, _line_color.rgb, saturate(alpha));
 				return float4(color, 1.0);
 			}
 		ENDCG
