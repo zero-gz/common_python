@@ -7,6 +7,12 @@ public class intergerSSSTool : ScriptableWizard
 {
     public int tex_size = 256;
     public string res_path = "Assets/Resources/";
+    public Vector4 factor1 = new Vector4(0.064f, 0.233f, 0.455f, 0.649f);
+    public Vector4 factor2 = new Vector4(0.0484f, 0.100f, 0.336f, 0.344f);
+    public Vector4 factor3 = new Vector4(0.1870f, 0.118f, 0.198f, 0.000f);
+    public Vector4 factor4 = new Vector4(0.5670f, 0.113f, 0.007f, 0.007f);
+    public Vector4 factor5 = new Vector4(1.9900f, 0.358f, 0.004f, 0.000f);
+    public Vector4 factor6 = new Vector4(7.4100f, 0.078f, 0.000f, 0.000f);
 
     void OnWizardUpdate()
     {
@@ -22,20 +28,14 @@ public class intergerSSSTool : ScriptableWizard
 
     Vector3 Scatter(float r)
     {
-        Vector3 factor1 = new Vector3(0.233f, 0.455f, 0.649f);
-        Vector3 factor2 = new Vector3(0.100f, 0.336f, 0.344f);
-        Vector3 factor3 = new Vector3(0.118f, 0.198f, 0.000f);
-        Vector3 factor4 = new Vector3(0.113f, 0.007f, 0.007f);
-        Vector3 factor5 = new Vector3(0.358f, 0.004f, 0.000f);
-        Vector3 factor6 = new Vector3(0.078f, 0.000f, 0.000f);
-
-        float sq = 1.0f; // 1.414f;
-        return Gaussian(0.0064f*sq, r) * factor1 +
-            Gaussian(0.0484f*sq, r) * factor2 +
-            Gaussian(0.1870f*sq, r) * factor3 +
-            Gaussian(0.5670f*sq, r) * factor4 +
-            Gaussian(1.9900f*sq, r) * factor5 +
-            Gaussian(7.4100f*sq, r) * factor6;
+        float sq = 1.414f;
+        
+        return Gaussian(factor1.x*sq, r) * new Vector3(factor1.y, factor1.z, factor1.w) +
+            Gaussian(factor2.x*sq, r) * new Vector3(factor2.y, factor2.z, factor2.w) +
+            Gaussian(factor3.x*sq, r) * new Vector3(factor3.y, factor3.z, factor3.w) +
+            Gaussian(factor4.x*sq, r) * new Vector3(factor4.y, factor4.z, factor4.w) +
+            Gaussian(factor5.x*sq, r) * new Vector3(factor5.y, factor5.z, factor5.w) +
+            Gaussian(factor6.x*sq, r) * new Vector3(factor6.y, factor6.z, factor6.w);
     }
 
     float GaussianOther(float v, float r)
@@ -45,20 +45,13 @@ public class intergerSSSTool : ScriptableWizard
 
     Vector3 ScatterWithGaussOther(float r)
     {
-        Vector3 factor1 = new Vector3(0.233f, 0.455f, 0.649f);
-        Vector3 factor2 = new Vector3(0.100f, 0.336f, 0.344f);
-        Vector3 factor3 = new Vector3(0.118f, 0.198f, 0.000f);
-        Vector3 factor4 = new Vector3(0.113f, 0.007f, 0.007f);
-        Vector3 factor5 = new Vector3(0.358f, 0.004f, 0.000f);
-        Vector3 factor6 = new Vector3(0.078f, 0.000f, 0.000f);
-
-        float sq = 1.0f; // 1.414f;
-        return GaussianOther(0.0064f * sq, r) * factor1 +
-            GaussianOther(0.0484f * sq, r) * factor2 +
-            GaussianOther(0.1870f * sq, r) * factor3 +
-            GaussianOther(0.5670f * sq, r) * factor4 +
-            GaussianOther(1.9900f * sq, r) * factor5 +
-            GaussianOther(7.4100f * sq, r) * factor6;
+        float sq = 1.0f;
+        return GaussianOther(factor1.x * sq, r) * new Vector3(factor1.y, factor1.z, factor1.w) +
+             GaussianOther(factor2.x * sq, r) * new Vector3(factor2.y, factor2.z, factor2.w) +
+             GaussianOther(factor3.x * sq, r) * new Vector3(factor3.y, factor3.z, factor3.w) +
+             GaussianOther(factor4.x * sq, r) * new Vector3(factor4.y, factor4.z, factor4.w) +
+             GaussianOther(factor5.x * sq, r) * new Vector3(factor5.y, factor5.z, factor5.w) +
+             GaussianOther(factor6.x * sq, r) * new Vector3(factor6.y, factor6.z, factor6.w);
     }
 
     Vector3 integrateDiffuseScatteringOnRing(float cosTheta, float skinRadius, float inc)
@@ -125,7 +118,7 @@ public class intergerSSSTool : ScriptableWizard
 
                 float radius = 2.0f * Mathf.Sqrt(Mathf.Pow(cosTheta - 0.5f, 2.0f) + Mathf.Pow(height_y - 0.5f, 2.0f));
 
-                Vector3 result = ScatterWithGaussOther(radius);
+                Vector3 result = Scatter(radius); //ScatterWithGaussOther(radius);
                 Color col = new Color(result.x, result.y, result.z);
                 tex.SetPixel(i, j, col);
             }
