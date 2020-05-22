@@ -6,7 +6,7 @@
 		_normal_tex ("normal texture", 2D) = "bump"{}
 		_mix_tex ("mix texture (R metallic, G roughness)", 2D) = "black" {}
 		[HDR]_emissive("Emissive", Color) = (0.0, 0.0, 0.0, 0.0)
-		[KeywordEnum(DEFAULT, SUBSURFACE, SKIN)] _LIGHTING_TYPE("shading model", Float) = 0
+		[KeywordEnum(DEFAULT, SUBSURFACE, SKIN, HAIR)] _LIGHTING_TYPE("shading model", Float) = 0
 
 			//在开启 SUBSURFACE的情况下,_sss_color作为次表面散射的色彩
 			_sss_color("SSS color", Color) = (0.0, 0.0, 0.0, 1.0)
@@ -16,6 +16,10 @@
 			//skin相关
 			_preinteger_tex("preinteger tex", 2D) = "white" {}
 			_sss_tex("sss tex", 2D) = "white" {}
+
+			//hair相关
+			_anisotropy("anisortopy", Range(-1.0, 1.0)) = 0.0
+			_anisotropy_intensity("_anisotropy_intensity", Range(1.0, 10.0)) = 1.0
 
 			//color_tint
 			/*
@@ -90,9 +94,11 @@
 
 			#pragma multi_compile_fwdbase
 			#pragma enable_d3d11_debug_symbols
-			#pragma shader_feature _LIGHTING_TYPE_DEFAULT _LIGHTING_TYPE_SUBSURFACE _LIGHTING_TYPE_SKIN
+			#pragma shader_feature _LIGHTING_TYPE_DEFAULT _LIGHTING_TYPE_SUBSURFACE _LIGHTING_TYPE_SKIN _LIGHTING_TYPE_HAIR
 
 			float _sss_strength;
+			float _anisotropy;
+			float _anisotropy_intensity;
 			
 			#include "UnityCG.cginc"
 			#include "Lighting.cginc"

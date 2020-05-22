@@ -82,7 +82,7 @@ LightingResult isotropy_lighting(LightingVars data)
 
     float NoL = max(dot(data.N, data.L), 0.0);
 	// unity的问题，乘以了pi
-    result.lighting_diffuse = (data.light_color*NoL) * Diffuse_Lambert(data.diffuse_color)*PI;
+	result.lighting_diffuse = (data.light_color*NoL) * Diffuse_Lambert(data.diffuse_color)*PI;
     result.lighting_specular = (data.light_color*NoL) * SpecularGGX(data)*PI;
 	result.lighting_scatter = float3(0.0, 0.0, 0.0);
     return result;
@@ -114,20 +114,86 @@ LightingResult skin_lighting(LightingVars data)
 {
 	LightingResult result;
 
-	float curvature = length(fwidth(data.N)) / length(fwidth(data.world_pos));
+	float curvature = saturate( length(fwidth(data.N)) / length(fwidth(data.world_pos)));
 
 	float NoL = max(dot(data.N, data.L), 0.0);
 	float2 preinteger_uv;
 	preinteger_uv.x = dot(data.N, data.L)*0.5 + 0.5;
-	preinteger_uv.y = curvature * dot(data.light_color, float3(0.22, 0.707, 0.071));
+	preinteger_uv.y = saturate( curvature * dot(data.light_color, float3(0.22, 0.707, 0.071)) );
 	float3 brdf = tex2D(_preinteger_tex, preinteger_uv).rgb;
 
 	result.lighting_diffuse = (data.light_color*lerp(NoL, brdf, data.thickness)) * Diffuse_Lambert(data.diffuse_color)*PI;
 	result.lighting_specular = (data.light_color*NoL) * SpecularGGX(data)*PI;
 
-	//加上反向的透射部分
-	float trans_dot = pow(saturate(dot(data.V, -data.L)), _sss_power)*_sss_strength*data.thickness;
-	result.lighting_scatter = float3(0.0f, 0.0f, 0.0f); // trans_dot * data.sss_color;
+	//加上反向的透射部分，其实 前面nol允许负数取值，就说明了暗部不是一个纯黑，而是一个有微弱红色色彩偏向的值
+	//float trans_dot = pow(saturate(dot(data.V, -data.L)), _sss_power)*_sss_strength*data.thickness;
+	result.lighting_scatter = float3(0,0,0); // trans_dot * data.sss_color;
+	return result;
+}
+
+float3 SpecularAnisotropic(LightingVars data)
+{
+	/*
+	//某一种各项异性，带物理性的公式 这里的负号是为什么？？ 神一般的操作啊
+	float LoT = dot(-data.L, data.T);
+	float VoT = dot(data.V, data.T);
+	float shiniess = 1.0f - data.roughness;
+	float factor = pow(sqrt(1.0 - LoT * LoT)*sqrt(1.0 - VoT * VoT) + LoT * VoT, shiniess*256.0f)*_anisotropy_intensity;
+	return max(0.0, factor)*data.f0;
+	*/
+
+	//kajiya的高光公式
+	/*
+	float shiniess = 1.0f - data.roughness;
+	float ToH = dot(data.T, data.H);
+	float factor = pow(sqrt(1.0 - ToH * ToH), shiniess*256.0f)*_anisotropy_intensity;
+	return max(0.0, factor)*data.f0;
+	*/
+
+	
+	float at = max(data.roughness*(1.0 + _anisotropy), 0.001f);
+	float ab = max(data.roughness*(1.0 - _anisotropy), 0.001f);
+
+	float NoH = max(saturate(dot(data.N, data.H)), CHAOS);
+	float NoL = max(saturate(dot(data.N, data.L)), CHAOS);
+	float NoV = max(saturate(dot(data.N, data.V)), CHAOS);
+	float VoH = max(saturate(dot(data.V, data.H)), CHAOS);
+
+	float ToH = dot(data.T, data.H);
+	float BoH = dot(data.B, data.H);
+
+	float ToV = dot(data.T, data.V);
+	float BoV = dot(data.B, data.V);
+	float ToL = dot(data.T, data.L);
+	float BoL = dot(data.B, data.L);
+
+	// D项
+	float a2 = at * ab;
+	float3 v = float3(ab*ToH, at*BoH, a2*NoH);
+	float v2 = dot(v, v);
+	float w2 = a2 / v2;
+	float D = a2 * w2*w2*(1.0 / PI);
+
+	// V项
+	float lambdaV = NoL * length(float3(at * ToV, ab * BoV, NoV));
+	float lambdaL = NoV * length(float3(at * ToL, ab * BoL, NoL));
+	float Vis = 0.5 / (lambdaV + lambdaL);
+
+	// F项
+	float3 F = F_Schlick(data.f0, VoH);
+
+	return (D * Vis) * F * _anisotropy_intensity;
+	
+}
+
+LightingResult hair_lighting(LightingVars data)
+{
+	LightingResult result;
+
+	float NoL = max(dot(data.N, data.L), 0.0);
+	result.lighting_diffuse = (data.light_color*NoL) * Diffuse_Lambert(data.diffuse_color)*PI;
+	result.lighting_specular = (data.light_color*NoL) * SpecularAnisotropic(data)*PI;
+	result.lighting_scatter = float3(0, 0, 0);
 	return result;
 }
 
@@ -139,6 +205,8 @@ LightingResult direct_lighting(LightingVars data)
 		return subsurface_lighting(data);
 	#elif _LIGHTING_TYPE_SKIN
 		return skin_lighting(data);
+	#elif _LIGHTING_TYPE_HAIR
+		return hair_lighting(data);
 	#else
 		return isotropy_lighting(data);
 	#endif
