@@ -7,36 +7,107 @@ using UnityEditor;
 public class preinteger_property : Editor {
     private preinteger_assets assets;
     private Texture2D tex;
-    private Material previewMaterial;
+    private Material graphMaterial;
     private Material radiusMaterial;
+
+    void updateMaterial()
+    {
+        graphMaterial.SetVector("factor1", new Vector4(assets.factor1.r, assets.factor1.g, assets.factor1.b, assets.factor1.a));
+        graphMaterial.SetVector("factor2", new Vector4(assets.factor2.r, assets.factor2.g, assets.factor2.b, assets.factor2.a));
+        graphMaterial.SetVector("factor3", new Vector4(assets.factor3.r, assets.factor3.g, assets.factor3.b, assets.factor3.a));
+        graphMaterial.SetVector("factor4", new Vector4(assets.factor4.r, assets.factor4.g, assets.factor4.b, assets.factor4.a));
+        graphMaterial.SetVector("factor5", new Vector4(assets.factor5.r, assets.factor5.g, assets.factor5.b, assets.factor5.a));
+        graphMaterial.SetVector("factor6", new Vector4(assets.factor6.r, assets.factor6.g, assets.factor6.b, assets.factor6.a));
+        graphMaterial.SetFloat("_x_size", assets.x_size);
+        graphMaterial.SetFloat("_y_size", assets.y_size);
+
+        radiusMaterial.SetVector("factor1", new Vector4(assets.factor1.r, assets.factor1.g, assets.factor1.b, assets.factor1.a));
+        radiusMaterial.SetVector("factor2", new Vector4(assets.factor2.r, assets.factor2.g, assets.factor2.b, assets.factor2.a));
+        radiusMaterial.SetVector("factor3", new Vector4(assets.factor3.r, assets.factor3.g, assets.factor3.b, assets.factor3.a));
+        radiusMaterial.SetVector("factor4", new Vector4(assets.factor4.r, assets.factor4.g, assets.factor4.b, assets.factor4.a));
+        radiusMaterial.SetVector("factor5", new Vector4(assets.factor5.r, assets.factor5.g, assets.factor5.b, assets.factor5.a));
+        radiusMaterial.SetVector("factor6", new Vector4(assets.factor6.r, assets.factor6.g, assets.factor6.b, assets.factor6.a));
+    }
 
     void OnEnable()
     {
         //获取当前编辑自定义Inspector的对象
         assets = (preinteger_assets)target;
         tex = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Resources/preinteger_diffusion_profile.png");
-        previewMaterial = new Material(Shader.Find("my_shader/VisualizeReflectanceGraphTest"));
-        previewMaterial.SetFloat("_PreviewScatteringPower", 1.0f);
-        previewMaterial.SetFloat("_TextureWidth", 256);
-        previewMaterial.SetFloat("_TextureHeight", 256);
-        //previewMaterial.SetColor("_back_color", new Color(0.0f, 0.0f, 0.0f, 1.0f));
 
-        radiusMaterial = new Material(Shader.Find("Hidden/PreIntegratedSkinShader/ComputeLookup/VisualizeRadialDistance"));
-        //radiusMaterial = new Material(Shader.Find("my_shader/VisualizeReflectanceGraphTest"));
-        radiusMaterial.SetFloat("_TextureWidth", 256);
-        radiusMaterial.SetFloat("_TextureHeight", 256);
-        radiusMaterial.SetFloat("_PreviewScatteringPower", 1.0f);
+        graphMaterial = new Material(Shader.Find("my_shader/draw_graph_3color_guass"));
+        radiusMaterial = new Material(Shader.Find("my_shader/draw_diffuse_scatter"));
+
+        updateMaterial();
     }
-    /*
-        EditorGUI.BeginChangeCheck();
+
+    float Gaussian(float v, float r)
+    {
+        return 1.0f / Mathf.Sqrt(2.0f * Mathf.PI * v) * Mathf.Exp(-(r * r) / (2.0f * v));
+        //return 1.0f / (2.0f * Mathf.PI * v) * Mathf.Exp(-(r * r) / (2.0f * v));
+    }
+
+    Vector3 Scatter(float r)
+    {
+        float sq = 1.414f;
+
+        return Gaussian(assets.factor1.r * sq, r) * new Vector3(assets.factor1.g, assets.factor1.b, assets.factor1.a) +
+            Gaussian(assets.factor2.r * sq, r) * new Vector3(assets.factor2.g, assets.factor2.b, assets.factor2.a) +
+            Gaussian(assets.factor3.r * sq, r) * new Vector3(assets.factor3.g, assets.factor3.b, assets.factor3.a) +
+            Gaussian(assets.factor4.r * sq, r) * new Vector3(assets.factor4.g, assets.factor4.b, assets.factor4.a) +
+            Gaussian(assets.factor5.r * sq, r) * new Vector3(assets.factor5.g, assets.factor5.b, assets.factor5.a) +
+            Gaussian(assets.factor6.r * sq, r) * new Vector3(assets.factor6.g, assets.factor6.b, assets.factor6.a);
+    }
+
+    Vector3 integrateDiffuseScatteringOnRing(float cosTheta, float skinRadius, float inc)
+    {
+        //float theta = Mathf.Acos(cosTheta);
+        float theta = Mathf.PI * (1.0f - cosTheta);
+        Vector3 totalWeights = new Vector3(0.0f, 0.0f, 0.0f);
+        Vector3 totalLight = new Vector3(0.0f, 0.0f, 0.0f);
+        float x = -(Mathf.PI / 2);
+        while (x <= (Mathf.PI / 2))
         {
-            assets.value = EditorGUILayout.Slider("this is a slider", assets.value, 0, 1);
+            float diffuse = Mathf.Clamp01(Mathf.Cos(theta + x));
+            float sampleDist = Mathf.Abs(2.0f * skinRadius * Mathf.Sin(x * 0.5f));
+            Vector3 weights = Scatter(sampleDist);
+            totalWeights += weights;
+            totalLight += diffuse * weights;
+            x += inc;
         }
-        if (EditorGUI.EndChangeCheck())
-        {
-            Debug.Log(string.Format("get slider value:{0}", assets.value ));
-        }
-     */
+        Vector3 result;
+        result.x = totalLight.x / totalWeights.x;
+        result.y = totalLight.y / totalWeights.y;
+        result.z = totalLight.z / totalWeights.z;
+        return result;
+    }
+
+    void _gen_preinteger_tex()
+    {
+        int width, height;
+        width = height = assets.tex_size;
+        Texture2D tex = new Texture2D(width, height);
+
+        for (int j = 0; j < height; j++)
+            for (int i = 0; i < width; i++)
+            {
+                float cosTheta = i * 1.0f / width;
+                float height_y = j * 1.0f / height;
+                float skinRadius;
+                if (height_y < 0.01f)
+                    skinRadius = 100.0f;
+                else
+                    skinRadius = 1.0f / height_y;
+
+                Vector3 result = integrateDiffuseScatteringOnRing(cosTheta, skinRadius, 0.1f);
+                Color col = new Color(result.x, result.y, result.z);
+                tex.SetPixel(i, j, col);
+            }
+
+        tex.Apply();
+        util.save_texture(assets.tex_path + "preinteger.png", tex);
+    }
+ 
 
     public override void OnInspectorGUI()
     {
@@ -47,52 +118,28 @@ public class preinteger_property : Editor {
         if (EditorGUI.EndChangeCheck())
         {
             Debug.Log("get something changed!!!!!!!!!!!!!");
-            previewMaterial.SetColor("_PSSProfileHigh_weighths1_var1", new Color(assets.factor1.g, assets.factor1.b, assets.factor1.a, assets.factor1.r));
-            previewMaterial.SetColor("_PSSProfileHigh_weighths2_var2", new Color(assets.factor2.g, assets.factor2.b, assets.factor2.a, assets.factor2.r));
-            previewMaterial.SetColor("_PSSProfileHigh_weighths3_var3", new Color(assets.factor3.g, assets.factor3.b, assets.factor3.a, assets.factor3.r));
-            previewMaterial.SetColor("_PSSProfileHigh_weighths4_var4", new Color(assets.factor4.g, assets.factor4.b, assets.factor4.a, assets.factor4.r));
-            previewMaterial.SetColor("_PSSProfileHigh_weighths5_var5", new Color(assets.factor5.g, assets.factor5.b, assets.factor5.a, assets.factor5.r));
-            previewMaterial.SetColor("_PSSProfileHigh_weighths6_var6", new Color(assets.factor6.g, assets.factor6.b, assets.factor6.a, assets.factor6.r));
-
-            radiusMaterial.SetColor("_PSSProfileHigh_weighths1_var1", new Color(assets.factor1.g, assets.factor1.b, assets.factor1.a, assets.factor1.r));
-            radiusMaterial.SetColor("_PSSProfileHigh_weighths2_var2", new Color(assets.factor2.g, assets.factor2.b, assets.factor2.a, assets.factor2.r));
-            radiusMaterial.SetColor("_PSSProfileHigh_weighths3_var3", new Color(assets.factor3.g, assets.factor3.b, assets.factor3.a, assets.factor3.r));
-            radiusMaterial.SetColor("_PSSProfileHigh_weighths4_var4", new Color(assets.factor4.g, assets.factor4.b, assets.factor4.a, assets.factor4.r));
-            radiusMaterial.SetColor("_PSSProfileHigh_weighths5_var5", new Color(assets.factor5.g, assets.factor5.b, assets.factor5.a, assets.factor5.r));
-            radiusMaterial.SetColor("_PSSProfileHigh_weighths6_var6", new Color(assets.factor6.g, assets.factor6.b, assets.factor6.a, assets.factor6.r));
+            updateMaterial();
         }
 
-
-            EditorGUI.BeginChangeCheck();
+        if (GUILayout.Button("生成预积分贴图"))
         {
-            assets.x_size = EditorGUILayout.Slider("x_size", assets.x_size, 1, 20);
-        }
-
-        if(EditorGUI.EndChangeCheck())
-        {
-            previewMaterial.SetFloat("_x_size", assets.x_size);
+            Debug.Log(string.Format("get button click!!!"));
+            _gen_preinteger_tex();
         }
 
         EditorGUILayout.Space();
         EditorGUILayout.LabelField("--------- 下面是添加的显示部分 -------------");
 
-        Vector2 start_pos = new Vector2(20, 270);
-        Vector2 pic_size = new Vector2(150, 150);
+        EditorGUILayout.LabelField("       高斯曲线                                                          示意图");
+        Vector2 start_pos = new Vector2(40, 330);
+        Vector2 pic_size = new Vector2(256, 256);
 
         Rect rect = new Rect(start_pos, pic_size);
-        Graphics.DrawTexture(rect, EditorGUIUtility.whiteTexture, previewMaterial);
+        Graphics.DrawTexture(rect, EditorGUIUtility.whiteTexture, graphMaterial);
 
-        start_pos.y += 200;
+        start_pos.x += 300;
         Rect rect1 = new Rect(start_pos, pic_size);
         Graphics.DrawTexture(rect1, EditorGUIUtility.whiteTexture, radiusMaterial);
-
-        for(int i=0;i<65;i++)
-            EditorGUILayout.Space();
-
-        if (GUILayout.Button("生成 diffuse_povisor贴图"))
-        {
-            Debug.Log(string.Format("get button click!!!"));
-        }
     }
 
     /*
@@ -120,6 +167,7 @@ public class preinteger_property : Editor {
 
     */
 
+        /*
     public override bool HasPreviewGUI()
     {
         return true;
@@ -135,6 +183,7 @@ public class preinteger_property : Editor {
     {
         GUI.DrawTexture(r, tex, ScaleMode.StretchToFill, false);
     }
+    */
 
 
         /*
