@@ -20,6 +20,10 @@
 			//hair相关
 			_anisotropy("anisortopy", Range(-1.0, 1.0)) = 0.0
 			_anisotropy_intensity("_anisotropy_intensity", Range(1.0, 10.0)) = 1.0
+			_hair_jitter("hair jitter", 2D) = "black" {}
+			_jitter_scale("jitter scale", Range(0, 10)) = 0.0
+			_hair_tangent("hair tangent", 2D) = "white" {}
+
 
 			//color_tint
 			/*
@@ -99,6 +103,9 @@
 			float _sss_strength;
 			float _anisotropy;
 			float _anisotropy_intensity;
+			sampler _hair_jitter;
+			float _jitter_scale;
+			sampler _hair_tangent;
 			
 			#include "UnityCG.cginc"
 			#include "Lighting.cginc"

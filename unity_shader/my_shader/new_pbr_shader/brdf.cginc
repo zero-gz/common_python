@@ -192,6 +192,14 @@ LightingResult hair_lighting(LightingVars data)
 
 	float NoL = max(dot(data.N, data.L), 0.0);
 	result.lighting_diffuse = (data.light_color*NoL) * Diffuse_Lambert(data.diffuse_color)*PI;
+
+	// T需要进行jitter
+	float jitter = tex2D(_hair_jitter, data.base_vars.uv0).r;
+	data.T = data.T + data.N*jitter*_jitter_scale;
+
+	//float2 new_T = tex2D(_hair_tangent, data.base_vars.uv0).rg;
+	//data.T = data.T*new_T.x + data.B*new_T.y;
+
 	result.lighting_specular = (data.light_color*NoL) * SpecularAnisotropic(data)*PI;
 	result.lighting_scatter = float3(0, 0, 0);
 	return result;
