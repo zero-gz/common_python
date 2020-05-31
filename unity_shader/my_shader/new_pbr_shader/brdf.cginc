@@ -1,4 +1,6 @@
 #ifndef BRDF_INCLUDE
+// Upgrade NOTE: excluded shader from DX11, OpenGL ES 2.0 because it uses unsized arrays
+#pragma exclude_renderers d3d11 gles
 #define BRDF_INCLUDE
 
 /*
@@ -197,10 +199,221 @@ LightingResult hair_lighting(LightingVars data)
 	float jitter = tex2D(_hair_jitter, data.base_vars.uv0).r;
 	data.T = data.T + data.N*jitter*_jitter_scale;
 
-	//float2 new_T = tex2D(_hair_tangent, data.base_vars.uv0).rg;
-	//data.T = data.T*new_T.x + data.B*new_T.y;
+	float3 new_T = tex2D(_hair_tangent, data.base_vars.uv0).rgb*2.0f - float3(1.0f, 1.0f, 1.0f);
+	data.T = data.T*new_T.x + data.B*new_T.y + data.N*new_T.z;
 
 	result.lighting_specular = (data.light_color*NoL) * SpecularAnisotropic(data)*PI;
+	result.lighting_scatter = float3(0, 0, 0);
+	return result;
+}
+//////////////////////////////////////////////////////////////////////////////
+
+// max absolute error 9.0x10^-3
+// Eberly's polynomial degree 1 - respect bounds
+// 4 VGPR, 12 FR (8 FR, 1 QR), 1 scalar
+// input [-1, 1] and output [0, PI]
+float acosFast(float inX)
+{
+	float x = abs(inX);
+	float res = -0.156583f * x + (0.5 * PI);
+	res *= sqrt(1.0f - x);
+	return (inX >= 0) ? res : PI - res;
+}
+
+// Same cost as acosFast + 1 FR
+// Same error
+// input [-1, 1] and output [-PI/2, PI/2]
+float asinFast(float x)
+{
+	return (0.5 * PI) - acosFast(x);
+}
+
+float Hair_g(float B, float Theta)
+{
+	return exp(-0.5 * Pow2(Theta) / (B*B)) / (sqrt(2 * PI) * B);
+}
+
+float Hair_F(float CosTheta)
+{
+	const float n = 1.55;
+	const float F0 = Pow2((1 - n) / (1 + n));
+	return F0 + (1 - F0) * Pow5(1 - CosTheta);
+}
+
+// Approximation to HairShadingRef using concepts from the following papers:
+// [Marschner et al. 2003, "Light Scattering from Human Hair Fibers"]
+// [Pekelis et al. 2015, "A Data-Driven Light Scattering Model for Hair"]
+float3 HairShading(LightingVars data)
+{
+	float Roughness = data.roughness;
+	float Area = 0.0f;
+	float3 V = data.V;
+	float3 L = data.L;
+	float3 N = data.T;
+
+	// to prevent NaN with decals
+	// OR-18489 HERO: IGGY: RMB on E ability causes blinding hair effect
+	// OR-17578 HERO: HAMMER: E causes blinding light on heroes with hair
+	float ClampedRoughness = clamp(Roughness, 1 / 255.0f, 1.0f);
+
+	const float VoL = dot(V, L);
+	const float SinThetaL = dot(N, L);
+	const float SinThetaV = dot(N, V);
+	float CosThetaD = cos(0.5 * abs(asinFast(SinThetaV) - asinFast(SinThetaL)));
+
+	//CosThetaD = abs( CosThetaD ) < 0.01 ? 0.01 : CosThetaD;
+
+	const float3 Lp = L - SinThetaL * N;
+	const float3 Vp = V - SinThetaV * N;
+	const float CosPhi = dot(Lp, Vp) * rsqrt(dot(Lp, Lp) * dot(Vp, Vp) + 1e-4);
+	const float CosHalfPhi = sqrt(saturate(0.5 + 0.5 * CosPhi));
+	//const float Phi = acosFast( CosPhi );
+
+	float n = 1.55;
+	//float n_prime = sqrt( n*n - 1 + Pow2( CosThetaD ) ) / CosThetaD;
+	float n_prime = 1.19 / CosThetaD + 0.36 * CosThetaD;
+
+	float Shift = 0.035;
+	float Alpha[] =
+	{
+		-Shift * 2,
+		Shift,
+		Shift * 4,
+	};
+	float B[] =
+	{
+		Area + Pow2(ClampedRoughness),
+		Area + Pow2(ClampedRoughness) / 2,
+		Area + Pow2(ClampedRoughness) * 2,
+	};
+
+	float3 S = 0;
+	float Backlit = 1.0f;
+
+	// R
+	if (1)
+	{
+		const float sa = sin(Alpha[0]);
+		const float ca = cos(Alpha[0]);
+		float Shift = 2 * sa* (ca * CosHalfPhi * sqrt(1 - SinThetaV * SinThetaV) + sa * SinThetaV);
+
+		float Mp = Hair_g(B[0] * sqrt(2.0) * CosHalfPhi, SinThetaL + SinThetaV - Shift);
+		float Np = 0.25 * CosHalfPhi;
+		float Fp = Hair_F(sqrt(saturate(0.5 + 0.5 * VoL)));
+		//S += Mp * Np * Fp * (data.f0 * 2);// *(1.0f - saturate(-VoL));
+		S += (Mp * Np) * (Fp * lerp(1, Backlit, saturate(-VoL)));
+	}
+
+	// TT
+	if (1)
+	{
+		float Mp = Hair_g(B[1], SinThetaL + SinThetaV - Alpha[1]);
+
+		float a = 1 / n_prime;
+		//float h = CosHalfPhi * rsqrt( 1 + a*a - 2*a * sqrt( 0.5 - 0.5 * CosPhi ) );
+		//float h = CosHalfPhi * ( ( 1 - Pow2( CosHalfPhi ) ) * a + 1 );
+		float h = CosHalfPhi * (1 + a * (0.6 - 0.8 * CosPhi));
+		//float h = 0.4;
+		//float yi = asinFast(h);
+		//float yt = asinFast(h / n_prime);
+
+		float f = Hair_F(CosThetaD * sqrt(saturate(1 - h * h)));
+		float Fp = Pow2(1 - f);
+		//float3 Tp = pow( GBuffer.BaseColor, 0.5 * ( 1 + cos(2*yt) ) / CosThetaD );
+		//float3 Tp = pow( GBuffer.BaseColor, 0.5 * cos(yt) / CosThetaD );
+		float3 Tp = pow(data.diffuse_color, 0.5 * sqrt(1 - Pow2(h * a)) / CosThetaD);
+
+		//float t = asin( 1 / n_prime );
+		//float d = ( sqrt(2) - t ) / ( 1 - t );
+		//float s = -0.5 * PI * (1 - 1 / n_prime) * log( 2*d - 1 - 2 * sqrt( d * (d - 1) ) );
+		//float s = 0.35;
+		//float Np = exp( (Phi - PI) / s ) / ( s * Pow2( 1 + exp( (Phi - PI) / s ) ) );
+		//float Np = 0.71 * exp( -1.65 * Pow2(Phi - PI) );
+		float Np = exp(-3.65 * CosPhi - 3.98);
+
+		S += Mp * Np * Fp * Tp;
+	}
+
+	// TRT
+	if (1)
+	{
+		float Mp = Hair_g(B[2], SinThetaL + SinThetaV - Alpha[2]);
+
+		//float h = 0.75;
+		float f = Hair_F(CosThetaD * 0.5);
+		float Fp = Pow2(1 - f) * f;
+		//float3 Tp = pow( GBuffer.BaseColor, 1.6 / CosThetaD );
+		float3 Tp = pow(data.diffuse_color, 0.8 / CosThetaD);
+
+		//float s = 0.15;
+		//float Np = 0.75 * exp( Phi / s ) / ( s * Pow2( 1 + exp( Phi / s ) ) );
+		float Np = exp(17 * CosPhi - 16.78);
+
+		S += Mp * Np * Fp * Tp;
+	}
+
+	/*
+	if (1)
+	{
+		// Use soft Kajiya Kay diffuse attenuation
+		float KajiyaDiffuse = 1 - abs(dot(N, L));
+
+		float3 FakeNormal = normalize(V - N * dot(V, N));
+		//N = normalize( DiffuseN + FakeNormal * 2 );
+		N = FakeNormal;
+
+		// Hack approximation for multiple scattering.
+		float Wrap = 1;
+		float NoL = saturate((dot(N, L) + Wrap) / Square(1 + Wrap));
+		float DiffuseScatter = (1 / PI) * lerp(NoL, KajiyaDiffuse, 0.33) * GBuffer.Metallic;
+		float Luma = Luminance(GBuffer.BaseColor);
+		float3 ScatterTint = pow(GBuffer.BaseColor / Luma, 1 - Shadow);
+		S += sqrt(GBuffer.BaseColor) * DiffuseScatter * ScatterTint;
+	}
+	*/
+
+	S = -min(-S, 0.0);
+
+	return S;
+}
+
+float3 HairDiffuseKajiyaUE(LightingVars data) {
+	float3 N = data.T;
+	float3 L = data.L;
+	float3 V = data.V;
+	float Shadow = data.shadow;
+
+	float3 S = 0;
+	float KajiyaDiffuse = 1 - abs(dot(N, L));
+
+	float3 FakeNormal = normalize(V - N * dot(V, N));
+	N = FakeNormal;
+
+	// Hack approximation for multiple scattering.
+	float Wrap = 1;
+	float NoL = saturate((dot(N, L) + Wrap) / ((1 + Wrap)*(1+Wrap)));
+	float DiffuseScatter = (1 / PI) * lerp(NoL, KajiyaDiffuse, 0.33);// *s.Metallic;
+	float Luma = Luminance(data.diffuse_color);
+	float3 ScatterTint = pow(data.diffuse_color / Luma, 1 - Shadow);
+	S = sqrt(data.diffuse_color) * DiffuseScatter * ScatterTint;
+	return S;
+}
+
+LightingResult ue_hair_lighting(LightingVars data)
+{
+	LightingResult result;
+	float4 hair_data = tex2D(_ue_hair_tex, data.base_vars.uv0);
+	data.diffuse_color = lerp(_root_color, _tip_color, hair_data.b);
+	
+	float3 new_T = tex2D(_hair_tangent, data.base_vars.uv0).rgb*2.0f - float3(1.0f, 1.0f, 1.0f);
+	data.T = data.T*new_T.x + data.B*new_T.y + data.N*new_T.z;
+	data.roughness = lerp(_roughness_range.x, _roughness_range.y, hair_data.g);
+	data.opacity = hair_data.a;
+	data.metallic = lerp(_metallic_range.x, _metallic_range.y, hair_data.g);
+
+	float NoL = max(dot(data.N, data.L), 0.0);
+	result.lighting_diffuse = (data.light_color*NoL) * HairDiffuseKajiyaUE(data);
+	result.lighting_specular = (data.light_color*NoL) * HairShading(data)*_anisotropy_intensity;
 	result.lighting_scatter = float3(0, 0, 0);
 	return result;
 }
@@ -215,6 +428,8 @@ LightingResult direct_lighting(LightingVars data)
 		return skin_lighting(data);
 	#elif _LIGHTING_TYPE_HAIR
 		return hair_lighting(data);
+	#elif _LIGHTING_TYPE_HAIR_UE
+		return ue_hair_lighting(data);
 	#else
 		return isotropy_lighting(data);
 	#endif

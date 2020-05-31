@@ -32,8 +32,9 @@ struct v2f
 	#if defined(LIGHTMAP_ON) || defined(DYNAMICLIGHTMAP_ON)
 		float4 lightmap_uv: TEXCOORD5;
 	#endif
+	float4 screen_pos:TEXCOORD6;
 
-	SHADOW_COORDS(6)
+	SHADOW_COORDS(7)
 };
 
 sampler2D _albedo_tex;
@@ -84,6 +85,8 @@ struct LightingVars {
 	// skin
 	float thickness;
 	float curvature;
+
+	float4 pos;
 };
 
 struct MaterialVars {

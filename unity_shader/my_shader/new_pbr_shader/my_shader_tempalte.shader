@@ -6,7 +6,7 @@
 		_normal_tex ("normal texture", 2D) = "bump"{}
 		_mix_tex ("mix texture (R metallic, G roughness)", 2D) = "black" {}
 		[HDR]_emissive("Emissive", Color) = (0.0, 0.0, 0.0, 0.0)
-		[KeywordEnum(DEFAULT, SUBSURFACE, SKIN, HAIR)] _LIGHTING_TYPE("shading model", Float) = 0
+		[KeywordEnum(DEFAULT, SUBSURFACE, SKIN, HAIR, HAIR_UE)] _LIGHTING_TYPE("shading model", Float) = 0
 
 			//在开启 SUBSURFACE的情况下,_sss_color作为次表面散射的色彩
 			_sss_color("SSS color", Color) = (0.0, 0.0, 0.0, 1.0)
@@ -19,10 +19,20 @@
 
 			//hair相关
 			_anisotropy("anisortopy", Range(-1.0, 1.0)) = 0.0
-			_anisotropy_intensity("_anisotropy_intensity", Range(1.0, 10.0)) = 1.0
+			_anisotropy_intensity("_anisotropy_intensity", Range(0.1, 10.0)) = 1.0
 			_hair_jitter("hair jitter", 2D) = "black" {}
 			_jitter_scale("jitter scale", Range(0, 10)) = 0.0
 			_hair_tangent("hair tangent", 2D) = "white" {}
+
+			//ue_hair相关
+			_ue_hair_tex("UE hair tex, R-Depth G-ID B-Root A-Alpha", 2D) = "white" {}
+			_root_color("root color", Color) = (0,0,0,1)
+			_tip_color("tip color", Color) = (0,0,0,1)
+			_roughness_range("roughness range", Vector) = (0.3, 0.5,0,0)
+			_metallic_range("metallic range", Vector) = (0.1, 0.2, 0, 0)
+			_hair_clip_alpha("hair clip alpha", Range(0, 1)) = 0.5
+			_hair_specular_color("hair specular color", Color) = (1.0, 1.0, 1.0, 1.0)
+			_hair_depth_unit("hair depth unit", Float) = 1.0
 
 
 			//color_tint
@@ -87,7 +97,7 @@
 			// 这个ForwardBase非常重要，不加这个， 光照取的结果都会跳变……
 			Tags {"LightMode" = "ForwardBase"}
 			CGPROGRAM
-			#pragma target 3.0
+			#pragma target 5.0
 			#pragma vertex vert
 			#pragma fragment frag
 			#pragma multi_compile LIGHTMAP_OFF LIGHTMAP_ON
@@ -98,7 +108,7 @@
 
 			#pragma multi_compile_fwdbase
 			#pragma enable_d3d11_debug_symbols
-			#pragma shader_feature _LIGHTING_TYPE_DEFAULT _LIGHTING_TYPE_SUBSURFACE _LIGHTING_TYPE_SKIN _LIGHTING_TYPE_HAIR
+			#pragma shader_feature _LIGHTING_TYPE_DEFAULT _LIGHTING_TYPE_SUBSURFACE _LIGHTING_TYPE_SKIN _LIGHTING_TYPE_HAIR _LIGHTING_TYPE_HAIR_UE
 
 			float _sss_strength;
 			float _anisotropy;
@@ -106,6 +116,16 @@
 			sampler _hair_jitter;
 			float _jitter_scale;
 			sampler _hair_tangent;
+
+			// ue hair
+			sampler _ue_hair_tex;
+			float4 _root_color;
+			float4 _tip_color;
+			float4 _roughness_range;
+			float4 _metallic_range;
+			float _hair_clip_alpha;
+			float4 _hair_specular_color;
+			float _hair_depth_unit;
 			
 			#include "UnityCG.cginc"
 			#include "Lighting.cginc"
@@ -137,6 +157,7 @@
 					o.lightmap_uv.zw = v.uv2.xy * unity_DynamicLightmapST.xy + unity_DynamicLightmapST.zw;
 				#endif
 
+				o.screen_pos = ComputeScreenPos(o.pos);
 				TRANSFER_SHADOW(o);
 
 				return o;
@@ -196,10 +217,26 @@
 
 				data.base_vars.pos = i.pos;
 				data.base_vars.uv0 = i.uv;
+				data.pos = i.pos;
 				return data;
 			}
 
-			fixed4 frag (v2f i) : SV_Target
+			void Unity_Dither(float alpha, float2 ScreenPosition)
+			{
+				float2 uv = ScreenPosition * _ScreenParams.xy + _Time.yz * 100;
+				float DITHER_THRESHOLDS[16] =
+				{
+					1.0 / 17.0,  9.0 / 17.0,  3.0 / 17.0, 11.0 / 17.0,
+					13.0 / 17.0,  5.0 / 17.0, 15.0 / 17.0,  7.0 / 17.0,
+					4.0 / 17.0, 12.0 / 17.0,  2.0 / 17.0, 10.0 / 17.0,
+					16.0 / 17.0,  8.0 / 17.0, 14.0 / 17.0,  6.0 / 17.0
+				};
+				uint index = (uint(uv.x) % 4) * 4 + uint(uv.y) % 4;
+				clip(alpha - DITHER_THRESHOLDS[index]);
+			}
+
+			fixed4 frag (v2f i, out float depth:SV_Depth) : SV_Target
+			//fixed4 frag(v2f i) : SV_Target
 			{
 				MaterialVars mtl = gen_material_vars(i);
 				LightingVars data = gen_lighting_vars(i, mtl);
@@ -221,8 +258,15 @@
 				//GI的处理
 				LightingResult gi_result = gi_lighting(data);
 
-				final_color = final_color + (gi_result.lighting_diffuse + gi_result.lighting_specular)*data.occlusion + mtl.emissive;
-
+				#ifndef _LIGHTING_TYPE_HAIR_UE
+					final_color = final_color + (gi_result.lighting_diffuse + gi_result.lighting_specular)*data.occlusion + mtl.emissive;
+					depth = data.pos.z/data.pos.w;
+				#else
+					float4 ue_hair_data = tex2D(_ue_hair_tex, i.uv);
+					float2 screen_pos = i.screen_pos.xy / i.screen_pos.w;
+					Unity_Dither(ue_hair_data.a - _hair_clip_alpha, screen_pos);					
+					depth = saturate( data.pos.z/data.pos.w + ue_hair_data.r*_hair_depth_unit);
+				#endif
 				// sample the texture
 				return fixed4(final_color, mtl.opacity);
 			}
