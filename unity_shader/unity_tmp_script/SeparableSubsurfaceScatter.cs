@@ -44,7 +44,7 @@ public class SeparableSubsurfaceScatter : MonoBehaviour {
 		RenderCamera.AddCommandBuffer(CameraEvent.AfterForwardOpaque, SubsurfaceBuffer);
 
         //这里rt的位置非常的奇怪，后面得好好查一下
-        spec_rt = new RenderTexture(RenderCamera.pixelWidth, RenderCamera.pixelHeight, 0);
+        spec_rt = new RenderTexture(RenderCamera.pixelWidth, RenderCamera.pixelHeight, 16);
         spec_rt.name = "add_specular_tex";
         //blur_rt = new RenderTexture(RenderCamera.pixelWidth, RenderCamera.pixelHeight, 0);
 
@@ -72,6 +72,7 @@ public class SeparableSubsurfaceScatter : MonoBehaviour {
         Mesh mesh = head.GetComponent<MeshFilter>().mesh;
         SpecularBuffer.Clear();
         SpecularBuffer.SetRenderTarget(spec_rt);
+        SpecularBuffer.ClearRenderTarget(true, true, Color.black);
         SpecularBuffer.DrawMesh(mesh, head.transform.localToWorldMatrix, SpecularEffects, 0, 0);
 
         Shader.SetGlobalTexture(Shader.PropertyToID("add_specular_tex"), spec_rt);
@@ -89,7 +90,7 @@ public class SeparableSubsurfaceScatter : MonoBehaviour {
 
         SubsurfaceBuffer.BlitStencil(BuiltinRenderTextureType.CameraTarget, SceneColorID, BuiltinRenderTextureType.CameraTarget, SubsurfaceEffects, 0);
         SubsurfaceBuffer.BlitStencil(SceneColorID, BlurTexID, BuiltinRenderTextureType.CameraTarget, SubsurfaceEffects, 1);
-        SubsurfaceBuffer.BlitSRT(BlurTexID, BuiltinRenderTextureType.CameraTarget, AddSpecularEffects, 0);
+        SubsurfaceBuffer.BlitStencil(BlurTexID, BuiltinRenderTextureType.CameraTarget, BuiltinRenderTextureType.CameraTarget, AddSpecularEffects, 0);
     }
 
 	void ClearSubsurfaceBuffer() {
