@@ -123,6 +123,7 @@
 			sampler _hair_jitter;
 			float _jitter_scale;
 			sampler _hair_tangent;
+			sampler shadowmap_rt;
 
 			// ue hair
 			sampler _ue_hair_tex;
@@ -133,6 +134,7 @@
 			float _hair_clip_alpha;
 			float4 _hair_specular_color;
 			float _hair_depth_unit;
+			float4x4 S_LightViewProjector;
 			
 			#include "UnityCG.cginc"
 			#include "Lighting.cginc"
@@ -242,6 +244,32 @@
 				clip(alpha - DITHER_THRESHOLDS[index]);
 			}
 
+			float3 TSM(LightingVars data)
+			{
+				float translucency = 0.8f;
+				float sssWidth = 0.5f;
+				float lightFarPlane = 60.0f;
+				float3 worldPosition = data.world_pos;
+				float3 worldNormal = data.N;
+				float3 light = data.L;
+
+				float scale = 8.25 * (1.0 - translucency) / sssWidth;
+				float4 shrinkedPos = float4(worldPosition - 0.005 * worldNormal, 1.0);
+				float4 shadowPosition = mul(S_LightViewProjector, shrinkedPos);
+				float d1 = tex2D(shadowmap_rt, shadowPosition.xy / shadowPosition.w).r; // 'd1' has a range of 0..1
+				float d2 = shadowPosition.z; // 'd2' has a range of 0..'lightFarPlane'
+				d1 *= lightFarPlane; // So we scale 'd1' accordingly:
+				float d = scale * abs(d1 - d2);
+				float dd = -d * d;
+				float3 profile = float3(0.233, 0.455, 0.649) * exp(dd / 0.0064) +
+					float3(0.1, 0.336, 0.344) * exp(dd / 0.0484) +
+					float3(0.118, 0.198, 0.0)   * exp(dd / 0.187) +
+					float3(0.113, 0.007, 0.007) * exp(dd / 0.567) +
+					float3(0.358, 0.004, 0.0)   * exp(dd / 1.99) +
+					float3(0.078, 0.0, 0.0)   * exp(dd / 7.41);
+				return profile * saturate(0.3 + dot(light, -worldNormal));
+			}
+
 			fixed4 frag (v2f i, out float depth:SV_Depth) : SV_Target
 			//fixed4 frag(v2f i) : SV_Target
 			{
@@ -260,7 +288,8 @@
 				//LightingResult dir_result = direct_blinnphone_lighting(data);
 				LightingResult dir_result = direct_lighting(data);
 				
-				fixed3 final_color = dir_result.lighting_diffuse*data.shadow; // (dir_result.lighting_diffuse + dir_result.lighting_specular)*data.shadow + dir_result.lighting_scatter;
+				float3 translucency_color = TSM(data);
+				fixed3 final_color = dir_result.lighting_diffuse*data.shadow +translucency_color; // (dir_result.lighting_diffuse + dir_result.lighting_specular)*data.shadow + dir_result.lighting_scatter;
 
 				//GI的处理
 				/*
