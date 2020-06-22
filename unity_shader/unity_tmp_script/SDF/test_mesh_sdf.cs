@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using SDFr;
 
 [RequireComponent(typeof(Camera))]
 public class test_mesh_sdf : MonoBehaviour
@@ -9,6 +10,23 @@ public class test_mesh_sdf : MonoBehaviour
     private Light m_light;
     private Material mesh_sdf_mtl;
 
+    public SDFData volumeA;
+    public Transform volumeATransform;
+
+    public Vector4 sphere1_pos_r = new Vector4(0, 0, 0, 1);
+    public Vector4 sphere2_pos_r = new Vector4(0, 1, 0, 1);
+    public Vector4 box_pos_size = new Vector4(2, 1, 1, 1);
+    public Vector4 plane_pos_y_offset = new Vector4(0,0,0,1);
+
+    private VolumeData[] _volumesData;
+    private ComputeBuffer _volumes;
+
+    private const int VolumeDataStride = 76;
+    private struct VolumeData
+    {
+        public Matrix4x4 WorldToLocal;
+        public Vector3 Extents;
+    }
 
     public static void SetupRaymarchingMatrix(float fieldOfView, Matrix4x4 view, Vector2 screenSize)
     {
@@ -71,6 +89,10 @@ public class test_mesh_sdf : MonoBehaviour
         m_cam = GetComponent<Camera>();
         m_light = GameObject.Find("Directional Light").GetComponent<Light>();
         mesh_sdf_mtl = new Material(Shader.Find("Custom/mesh_sdf"));
+
+        _volumesData = new VolumeData[2];
+        _volumes = new ComputeBuffer(2, VolumeDataStride);
+        _volumes.SetData(_volumesData);
     }
 
     void update_material_vars()
@@ -79,7 +101,19 @@ public class test_mesh_sdf : MonoBehaviour
         mesh_sdf_mtl.SetVector("_LightDir", m_light.transform.forward);
         mesh_sdf_mtl.SetVector("_LightPos", m_light.transform.position);
 
+        mesh_sdf_mtl.SetVector("_Sphere1", sphere1_pos_r);
+        mesh_sdf_mtl.SetVector("_Sphere2", sphere2_pos_r);
+        mesh_sdf_mtl.SetVector("_box", box_pos_size);
+        mesh_sdf_mtl.SetVector("_plane", plane_pos_y_offset);
+
         SetupRaymarchingMatrix(m_cam.fieldOfView, m_cam.worldToCameraMatrix, new Vector2(m_cam.pixelWidth, m_cam.pixelHeight));
+
+        _volumesData[0].WorldToLocal = volumeATransform.worldToLocalMatrix;
+        _volumesData[0].Extents = volumeA.bounds.extents;
+        _volumes.SetData(_volumesData);
+
+        mesh_sdf_mtl.SetBuffer("_VolumeBuffer", _volumes);
+        mesh_sdf_mtl.SetTexture("_VolumeATex", volumeA.sdfTexture);
     }
 
     // Update is called once per frame
