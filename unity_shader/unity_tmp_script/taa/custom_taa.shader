@@ -30,10 +30,10 @@
 				};
 
 				sampler2D _MainTex;
-				float4 _MainTex_ST;
 				float4 _MainTex_TexelSize;
 
-				sampler2D _CameraMotionVectorsTexture;
+				//sampler2D _CameraMotionVectorsTexture;
+				sampler2D _VelocityBuffer;
 				sampler2D _CameraDepthTexture;
 				float4 _CameraDepthTexture_TexelSize;
 				static const float FLT_EPS = 0.00000001f;
@@ -48,15 +48,9 @@
 				{
 					v2f o;
 					o.vertex = UnityObjectToClipPos(v.vertex);
-					o.uv = TRANSFORM_TEX(v.uv, _MainTex);
+					o.uv = v.uv;
 					return o;
 				}
-
-				struct f2rt
-				{
-					fixed4 buffer : SV_Target0;
-					fixed4 screen : SV_Target1;
-				};
 
 #if UNITY_REVERSED_Z
 #define ZCMP_GT(a, b) (a < b)
@@ -207,25 +201,28 @@
 					float k_feedback = lerp(_FeedbackMin, _FeedbackMax, unbiased_weight_sqr);
 
 					// output
-					return lerp(texel0, texel1, k_feedback);
+					float4 lerp_color = lerp(texel0, texel1, k_feedback);
+					float4 output;
+					output.rgb = YCoCg_RGB(lerp_color.rgb);
+					output.a = lerp_color.a;
+					return output;
 				}
 
 				fixed4 frag(v2f i) : SV_Target
 				{
-					f2rt OUT;
 					float2 uv = i.uv;
 
 					//--- 3x3 nearest (good)
 					float3 c_frag = find_closest_fragment_3x3(uv);
-					float2 ss_vel = tex2D(_CameraMotionVectorsTexture, c_frag.xy).xy;
+					float2 ss_vel = tex2D(_VelocityBuffer, c_frag.xy).xy;
 					float vs_dist = depth_sample_linear(c_frag.z);
 
 					// temporal resolve
 					float4 color_temporal = temporal_reprojection(uv, ss_vel, vs_dist);
-
 					// add noise
 					float4 noise4 = PDsrand4(uv + _SinTime.x + 0.6959174) / 510.0;
 					float4 output = saturate(color_temporal + noise4);
+					output = color_temporal;
 						
 					return output;
 				}

@@ -23,6 +23,7 @@ public class camera_taa : MonoBehaviour {
 
         m_mat = new Material(Shader.Find("my_shader/custom_taa"));
         pre_tex = new RenderTexture(Screen.width, Screen.height, 0);
+        pre_tex.name = "pre_texture";
 
         Shader.SetGlobalTexture(Shader.PropertyToID("_PrevTex"), pre_tex);
     }
@@ -36,6 +37,7 @@ public class camera_taa : MonoBehaviour {
     {
         m_mat.SetFloat("_FeedbackMin", feedbackMin);
         m_mat.SetFloat("_FeedbackMax", feedbackMax);
+        m_mat.SetTexture("_PrevTex", pre_tex);
 
         Graphics.Blit(source, destination, m_mat);
         Graphics.Blit(destination, pre_tex);
