@@ -7,8 +7,8 @@ public class camera_taa : MonoBehaviour {
     private Camera m_cam;
     private Material m_mat;
     private RenderTexture pre_tex;
-    private FrustumJitter _test_frust_jitter;
-    private VelocityBuffer _velocityBuffer;
+    private test_frust_jitter _test_frust_jitter;
+    private camera_motion_vector _velocityBuffer;
 
     [Range(0.0f, 1.0f)] public float feedbackMin = 0.88f;
     [Range(0.0f, 1.0f)] public float feedbackMax = 0.97f;
@@ -22,8 +22,8 @@ public class camera_taa : MonoBehaviour {
     {
         m_cam = GetComponent<Camera>();
         m_cam.depthTextureMode = DepthTextureMode.Depth | DepthTextureMode.MotionVectors;
-        _test_frust_jitter = GetComponent<FrustumJitter>();
-        _velocityBuffer = GetComponent<VelocityBuffer>();
+        _test_frust_jitter = GetComponent<test_frust_jitter>();
+        _velocityBuffer = GetComponent<camera_motion_vector>();
 
         m_mat = new Material(Shader.Find("my_shader/test_taa"));
         pre_tex = new RenderTexture(Screen.width, Screen.height, 0);
