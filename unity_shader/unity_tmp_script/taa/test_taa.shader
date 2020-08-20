@@ -17,17 +17,7 @@ Shader "my_shader/test_taa"
 #pragma only_renderers ps4 xboxone d3d11 d3d9 xbox360 opengl glcore gles3 metal vulkan
 #pragma target 3.0
 
-#pragma multi_compile CAMERA_PERSPECTIVE CAMERA_ORTHOGRAPHIC
-#pragma multi_compile MINMAX_3X3 MINMAX_3X3_ROUNDED MINMAX_4TAP_VARYING
-#pragma multi_compile __ UNJITTER_COLORSAMPLES
-#pragma multi_compile __ UNJITTER_NEIGHBORHOOD
-#pragma multi_compile __ UNJITTER_REPROJECTION
-#pragma multi_compile __ USE_YCOCG
-#pragma multi_compile __ USE_CLIPPING
-#pragma multi_compile __ USE_DILATION
 #pragma multi_compile __ USE_MOTION_BLUR
-#pragma multi_compile __ USE_MOTION_BLUR_NEIGHBORMAX
-#pragma multi_compile __ USE_OPTIMIZATIONS
 
 #pragma enable_d3d11_debug_symbols
 
@@ -230,7 +220,7 @@ Shader "my_shader/test_taa"
 		//--- 3x3 nearest (good)
 		float3 c_frag = find_closest_fragment_3x3(uv);
 		float2 ss_vel = tex2D(_VelocityBuffer, c_frag.xy).xy;
-		float vs_dist = depth_resolve_linear(c_frag.z);
+		float vs_dist = LinearEyeDepth(c_frag.z);
 
 		// temporal resolve
 		float4 color_temporal = temporal_reprojection(IN.ss_txc, ss_vel, vs_dist);

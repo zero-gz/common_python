@@ -199,8 +199,8 @@ LightingResult hair_lighting(LightingVars data)
 	float jitter = tex2D(_hair_jitter, data.base_vars.uv0).r;
 	data.T = data.T + data.N*jitter*_jitter_scale;
 
-	float3 new_T = tex2D(_hair_tangent, data.base_vars.uv0).rgb*2.0f - float3(1.0f, 1.0f, 1.0f);
-	data.T = data.T*new_T.x + data.B*new_T.y + data.N*new_T.z;
+	//float3 new_T = tex2D(_hair_tangent, data.base_vars.uv0).rgb*2.0f - float3(1.0f, 1.0f, 1.0f);
+	//data.T = data.T*new_T.x + data.B*new_T.y + data.N*new_T.z;
 
 	result.lighting_specular = (data.light_color*NoL) * SpecularAnisotropic(data)*PI;
 	result.lighting_scatter = float3(0, 0, 0);
@@ -418,6 +418,37 @@ LightingResult ue_hair_lighting(LightingVars data)
 	return result;
 }
 
+LightingResult clearcoat_lighting(LightingVars data)
+{
+	LightingResult result;
+	result.lighting_scatter = float3(0.0, 0.0, 0.0);
+
+	float NoL = max(dot(data.N, data.L), 0.0);
+	// unity的问题，乘以了pi
+	float3 base_diffuse = (data.light_color*NoL) * Diffuse_Lambert(data.diffuse_color)*PI;
+	float3 base_specular = (data.light_color*NoL) * SpecularGGX(data)*PI;
+	
+	// 这里进行clearcoat参数替换
+	float3 second_diffuse = float3(0.0, 0.0, 0.0);
+	float3 second_specular = float3(0.0, 0.0, 0.0);
+	float3 second_fresnel = float3(0.0, 0.0, 0.0);
+
+#if defined(_LIGHTING_TYPE_CLEARCOAT)
+	data.f0 = _clearcoat_f0.rgb;
+	data.roughness = _clearcoat_roughness;
+	data.N = data.clearcoat_N;
+	second_specular = (data.light_color*NoL) * SpecularGGX(data)*PI * _clearcoat_intensity;
+
+	float VoH = max(dot(data.V, data.H), 0.0);
+	second_fresnel = F_Schlick(data.f0, VoH) * _clearcoat_intensity;
+#endif
+
+	result.lighting_diffuse = base_diffuse + second_diffuse;
+	result.lighting_specular = base_specular * (1.0 - second_fresnel) + second_specular;
+
+	return result;
+}
+
 LightingResult direct_lighting(LightingVars data)
 {
 	#if _LIGHTING_TYPE_DEFAULT
@@ -430,6 +461,8 @@ LightingResult direct_lighting(LightingVars data)
 		return hair_lighting(data);
 	#elif _LIGHTING_TYPE_HAIR_UE
 		return ue_hair_lighting(data);
+	#elif _LIGHTING_TYPE_CLEARCOAT
+		return clearcoat_lighting(data);
 	#else
 		return isotropy_lighting(data);
 	#endif

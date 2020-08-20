@@ -87,6 +87,10 @@ struct LightingVars {
 	float curvature;
 
 	float4 pos;
+
+#if defined(_LIGHTING_TYPE_CLEARCOAT)
+	float3 clearcoat_N;
+#endif
 };
 
 struct MaterialVars {
@@ -101,6 +105,10 @@ struct MaterialVars {
 	float3 sss_color;
 	float thickness;
 	float curvature;
+
+#if defined(_LIGHTING_TYPE_CLEARCOAT)
+	float3 clearcoat_normal;
+#endif
 };
 
 struct LightingResult{

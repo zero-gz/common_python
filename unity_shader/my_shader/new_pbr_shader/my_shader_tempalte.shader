@@ -6,7 +6,7 @@
 		_normal_tex ("normal texture", 2D) = "bump"{}
 		_mix_tex ("mix texture (R metallic, G roughness)", 2D) = "black" {}
 		[HDR]_emissive("Emissive", Color) = (0.0, 0.0, 0.0, 0.0)
-		[KeywordEnum(DEFAULT, SUBSURFACE, SKIN, HAIR, HAIR_UE)] _LIGHTING_TYPE("shading model", Float) = 0
+		[KeywordEnum(DEFAULT, SUBSURFACE, SKIN, HAIR, HAIR_UE, CLEARCOAT)] _LIGHTING_TYPE("shading model", Float) = 0
 
 			//在开启 SUBSURFACE的情况下,_sss_color作为次表面散射的色彩
 			_sss_color("SSS color", Color) = (0.0, 0.0, 0.0, 1.0)
@@ -33,6 +33,12 @@
 			_hair_clip_alpha("hair clip alpha", Range(0, 1)) = 0.5
 			_hair_specular_color("hair specular color", Color) = (1.0, 1.0, 1.0, 1.0)
 			_hair_depth_unit("hair depth unit", Float) = 1.0
+
+			//clearcoat相关
+			_clearcoat_intensity("clear coat intensity", Range(0, 1)) = 0.0
+			_clearcoat_roughness("clear coat roughness", Range(0, 1)) = 0.0
+			_clearcoat_normal_tex("clearcoat normal tex", 2D) = "bump" {}
+			_clearcoat_f0("clear coat f0", Color) = (0.0, 0.0, 0.0, 0.0)
 
 
 			//color_tint
@@ -108,7 +114,7 @@
 
 			#pragma multi_compile_fwdbase
 			#pragma enable_d3d11_debug_symbols
-			#pragma shader_feature _LIGHTING_TYPE_DEFAULT _LIGHTING_TYPE_SUBSURFACE _LIGHTING_TYPE_SKIN _LIGHTING_TYPE_HAIR _LIGHTING_TYPE_HAIR_UE
+			#pragma shader_feature _LIGHTING_TYPE_DEFAULT _LIGHTING_TYPE_SUBSURFACE _LIGHTING_TYPE_SKIN _LIGHTING_TYPE_HAIR _LIGHTING_TYPE_HAIR_UE _LIGHTING_TYPE_CLEARCOAT
 
 			float _sss_strength;
 			float _anisotropy;
@@ -126,6 +132,12 @@
 			float _hair_clip_alpha;
 			float4 _hair_specular_color;
 			float _hair_depth_unit;
+
+			//clearcoat
+			float _clearcoat_intensity;
+			float _clearcoat_roughness;
+			sampler _clearcoat_normal_tex;
+			float4 _clearcoat_f0;
 			
 			#include "UnityCG.cginc"
 			#include "Lighting.cginc"
@@ -171,6 +183,11 @@
 
 				float3 normal_color = tex2D(_normal_tex, i.uv).rgb;
 				mtl.normal = normal_color*2.0 - 1.0;
+#if defined(_LIGHTING_TYPE_CLEARCOAT)
+				float3 clearcoat_normal_color = tex2D(_clearcoat_normal_tex, i.uv).rgb;
+				mtl.clearcoat_normal = clearcoat_normal_color * 2.0 - 1.0;
+#endif
+
 				mtl.roughness = tex2D(_mix_tex, i.uv).g; //_roughness;
 				mtl.metallic = tex2D(_mix_tex, i.uv).r; //_metallic;
 				mtl.emissive = _emissive;
@@ -191,6 +208,9 @@
 				data.T = normalize(i.world_tangent);
 				data.B = normalize(i.world_binnormal);
 				data.N = normalize(normalize(i.world_tangent) * mtl.normal.x + normalize(i.world_binnormal) * mtl.normal.y + normalize(i.world_normal) * mtl.normal.z);
+#if defined(_LIGHTING_TYPE_CLEARCOAT)
+				data.clearcoat_N = normalize(normalize(i.world_tangent) * mtl.clearcoat_normal.x + normalize(i.world_binnormal) * mtl.clearcoat_normal.y + normalize(i.world_normal) * mtl.clearcoat_normal.z);
+#endif
 
 				data.V = normalize(_WorldSpaceCameraPos.xyz - i.world_pos.xyz);
 				data.L = normalize(_WorldSpaceLightPos0.xyz);
@@ -235,9 +255,10 @@
 				clip(alpha - DITHER_THRESHOLDS[index]);
 			}
 
-			fixed4 frag (v2f i, out float depth:SV_Depth) : SV_Target
-			//fixed4 frag(v2f i) : SV_Target
+			//fixed4 frag (v2f i, out float depth:SV_Depth) : SV_Target
+			fixed4 frag(v2f i) : SV_Target
 			{
+				float depth;
 				MaterialVars mtl = gen_material_vars(i);
 				LightingVars data = gen_lighting_vars(i, mtl);
 				//effect_color_tint(i, mtl, data);
@@ -265,7 +286,9 @@
 					float4 ue_hair_data = tex2D(_ue_hair_tex, i.uv);
 					float2 screen_pos = i.screen_pos.xy / i.screen_pos.w;
 					Unity_Dither(ue_hair_data.a - _hair_clip_alpha, screen_pos);					
-					depth = saturate( data.pos.z/data.pos.w + ue_hair_data.r*_hair_depth_unit);
+					//depth = saturate( data.pos.z/data.pos.w + ue_hair_data.r*_hair_depth_unit);
+					//depth = data.pos.z / data.pos.w;
+					depth = saturate(ue_hair_data.r*_hair_depth_unit);
 				#endif
 				// sample the texture
 				return fixed4(final_color, mtl.opacity);
