@@ -65,6 +65,20 @@ public class util{
         RenderTexture.active = prev;
     }
 
+    // 这里给出一个接口设置的例子
+    //public static void save_texture_importer(string save_path)
+    //{
+    //    // override for pc的这些属性不知道怎么设置……
+    //    TextureImporter footprintTextureImporter = (TextureImporter)AssetImporter.GetAtPath(save_path);
+    //    footprintTextureImporter.sRGBTexture = false;
+    //    footprintTextureImporter.npotScale = TextureImporterNPOTScale.None;
+    //    footprintTextureImporter.isReadable = true;
+    //    footprintTextureImporter.mipmapEnabled = false;
+    //    footprintTextureImporter.textureFormat = TextureImporterFormat.RGBA32;
+    //    EditorUtility.SetDirty(footprintTextureImporter);
+    //    footprintTextureImporter.SaveAndReimport();
+    //}
+
     // -----------------------------------------------------------------------------
 
     public static string trans_mesh_to_string(MeshFilter mf, Vector3 scale)
