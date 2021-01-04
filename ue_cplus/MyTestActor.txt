@@ -1,0 +1,15 @@
+	FString test_fs = TEXT("test_123");
+	TEXT("test_123");
+	FName test_fn = TEXT("TEst_123");
+	
+	FText test_ft = FText::FromString(TEXT("TEst_123"));
+
+	FString output_str = "get output %s, %d, %d";
+	//FString output_tmp = FString::Format(output_str.GetCharArray(), "123", 1, 2);
+
+	//FText test_ft = TEXT("test 123");// FText::Format("test_123");
+
+	FString test_fn_out;
+	test_fn.ToString(test_fn_out);
+
+	UE_LOG(MyLogCategory, Warning, TEXT("get output %s, %s, %d, %d"), *test_fn_out,*(test_ft.ToString()), false, test_fn.IsEqual(FName("test_123")));
