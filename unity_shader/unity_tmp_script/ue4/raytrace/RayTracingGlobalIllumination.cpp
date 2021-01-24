@@ -262,8 +262,8 @@ DECLARE_GPU_STAT_NAMED(RayTracingGIFinalGather, TEXT("Ray Tracing GI: Final Gath
 DECLARE_GPU_STAT_NAMED(RayTracingGICreateGatherPoints, TEXT("Ray Tracing GI: Create Gather Points"));
 
 static const int GlobalProbeSideLengthIrradiance = 6, GlobalProbeSideLengthDepth = 14;
-static const FVector ProbeCounts[3] = { FVector(32, 32, 16), FVector(16, 16, 8), FVector(8, 8, 4) };
-static FIntVector ProbeBudgets[3] = { FIntVector(12, 12, 7), FIntVector(16, 16, 8), FIntVector(8, 8, 4) };
+static const FVector ProbeCounts[3] = { FVector(32, 32, 16), FVector(16, 16, 8), FVector(8, 8, 4) }; // 这个是什么意思呢？
+static FIntVector ProbeBudgets[3] = { FIntVector(12, 12, 7), FIntVector(16, 16, 8), FIntVector(8, 8, 4) };　//每帧更新的probe数量
 static FIntVector4 ProbeUpdateOrder[3] = { FIntVector4(0, 0, 0, 0), FIntVector4(0, 1, 0, 1), FIntVector4(0, 1, 0, 2) };
 
 void SetupLightParameters(
@@ -935,10 +935,10 @@ void InitRandomAndFrameUpdateLogic(FVector ProbeCount, const FViewInfo& View, FI
 
 	if (ProbeGroupCount[LodIndex] != NewProbeGroupCount || ProbeGroupCountNum[LodIndex] != NewProbeGroupCountNum)
 	{
-		ProbeGroupCount[LodIndex] = NewProbeGroupCount;
-		ProbeGroupCountNum[LodIndex] = NewProbeGroupCountNum;
-		ProbeGroupIndex[LodIndex] = 0;
-		InitUpdateProgress[LodIndex] = 0;
+		ProbeGroupCount[LodIndex] = NewProbeGroupCount; //　理论上，当前总probe数量为count时，每帧更新Ｘ，Ｙ，Ｚ个的情况下，需要更新的帧数总量
+		ProbeGroupCountNum[LodIndex] = NewProbeGroupCountNum; // X*Y*Z
+		ProbeGroupIndex[LodIndex] = 0; // 画大组的编号
+		InitUpdateProgress[LodIndex] = 0; //总体进度？带ＸＹＺ的
 	}
 
 	ProbeGroupIndex[LodIndex]++;
@@ -954,11 +954,12 @@ void InitRandomAndFrameUpdateLogic(FVector ProbeCount, const FViewInfo& View, FI
 
 		FVector StartPosition = View.FinalPostProcessSettings.RayTracingGINecaStartPosition;
 		FVector EndPosition = View.FinalPostProcessSettings.RayTracingGINecaStartPosition + 2 * View.FinalPostProcessSettings.RayTracingGINecaBounds;
-		FVector ProbeStep = (EndPosition - StartPosition) / (ProbeCount - 1);
+		FVector ProbeStep = (EndPosition - StartPosition) / (ProbeCount - 1);　//每个球体的XYZ间隔
 
-		FVector NearestProbeID = (View.ViewLocation - StartPosition) / ProbeStep;
+		FVector NearestProbeID = (View.ViewLocation - StartPosition) / ProbeStep; //计算当前最近球体的id编号
 		NearestProbeID = FVector(FMath::FloorToInt(NearestProbeID.X), FMath::FloorToInt(NearestProbeID.Y), FMath::FloorToInt(NearestProbeID.Z));
 
+		//根据当前预算，更新哪些vector
 		FVector StartProbeIDVector = FVector(NearestProbeID.X - ProbeBudget.X / 2 + 1, NearestProbeID.Y - ProbeBudget.Y / 2 + 1, NearestProbeID.Z - FMath::FloorToInt(ProbeBudget.Z / 2));
 		
 		//if (LodIndex == 0)
@@ -1026,14 +1027,14 @@ void FDeferredShadingSceneRenderer::RenderRayTracingNecaGlobalIllumination(
 
 	FSceneRenderTargets& SceneContext = FSceneRenderTargets::Get(GraphBuilder.RHICmdList);
 	
-	int32 ProbeSideLengthIrradiance = GlobalProbeSideLengthIrradiance;
-	int32 ProbeSideLengthDepth = GlobalProbeSideLengthDepth;
-	float Hysterisist = GRayTracingGlobalIllumiantionHysterisist;
+	int32 ProbeSideLengthIrradiance = GlobalProbeSideLengthIrradiance; //6
+	int32 ProbeSideLengthDepth = GlobalProbeSideLengthDepth; //14
+	float Hysterisist = GRayTracingGlobalIllumiantionHysterisist; //0.96
 	float DepthSharpness = 50.0f;
-	float NormalBias = GRayTracingGlobalIllumiantionNormalBias;
+	float NormalBias = GRayTracingGlobalIllumiantionNormalBias; //25??
 
-	FVector StartPosition = View.FinalPostProcessSettings.RayTracingGINecaStartPosition;
-	FVector EndPosition = View.FinalPostProcessSettings.RayTracingGINecaStartPosition + 2 * View.FinalPostProcessSettings.RayTracingGINecaBounds;
+	FVector StartPosition = View.FinalPostProcessSettings.RayTracingGINecaStartPosition;　//　左下角的世界坐标
+	FVector EndPosition = View.FinalPostProcessSettings.RayTracingGINecaStartPosition + 2 * View.FinalPostProcessSettings.RayTracingGINecaBounds; //右上角的世界坐标
 
 	static int32 GIRaysCount = 128;
 	static bool needTextReGen[3] = { true, true, true };
@@ -1050,11 +1051,15 @@ void FDeferredShadingSceneRenderer::RenderRayTracingNecaGlobalIllumination(
 
 	for (int lod = 0; lod < 3; lod++)
 	{
-		ProbeSteps[lod] = (EndPosition - StartPosition) / (ProbeCounts[lod] - 1);
+		ProbeSteps[lod] = (EndPosition - StartPosition) / (ProbeCounts[lod] - 1); //是不是可以认为初始值是这么多，但是你拉框的时候，可以指定的更密，也就是值会被修改？
+		//gather后　Irradiance的长和宽
 		IrradianceWidth[lod] = (ProbeSideLengthIrradiance + 2) * ProbeCounts[lod].X * ProbeCounts[lod].Z + 2;
 		IrradianceHeight[lod] = (ProbeSideLengthIrradiance + 2) * ProbeCounts[lod].Y + 2;
+		//gather后　depth贴图的长和宽
 		DepthWidth[lod] = (ProbeSideLengthDepth + 2) * ProbeCounts[lod].X * ProbeCounts[lod].Z + 2;
 		DepthHeight[lod] = (ProbeSideLengthDepth + 2) * ProbeCounts[lod].Y + 2;
+
+		//感觉下面这两组是没用的
 		IrradianceConvolutionWidth[lod] = (ProbeSideLengthIrradiance + 2) * ProbeBudgets[lod].X * ProbeBudgets[lod].Z;
 		IrradianceConvolutionHeight[lod] = (ProbeSideLengthIrradiance + 2) * ProbeBudgets[lod].Y;
 		DepthConvolutionWidth[lod] = (ProbeSideLengthDepth + 2) * ProbeBudgets[lod].X * ProbeBudgets[lod].Z;
@@ -1080,6 +1085,7 @@ void FDeferredShadingSceneRenderer::RenderRayTracingNecaGlobalIllumination(
 	TRefCountPtr<IPooledRenderTarget>* GIDepthGatherRTPrev = SceneContext.GIDepthGather[1 - SceneContext.GIRadianceCurrent];
 
 	// Render targets Raw
+	// 这个的贴图大小，就是　[128，所有probe的个数]
 	FVector4 RawIrradianceTextureSize = FVector4(GIRaysCount, 
 		ProbeBudgets[UpdateLodLevel].X * ProbeBudgets[UpdateLodLevel].Y * ProbeBudgets[UpdateLodLevel].Z, 
 		1.0f / GIRaysCount, 1.0f / (ProbeBudgets[UpdateLodLevel].X * ProbeBudgets[UpdateLodLevel].Y * ProbeBudgets[UpdateLodLevel].Z));
@@ -1175,6 +1181,7 @@ void FDeferredShadingSceneRenderer::RenderRayTracingNecaGlobalIllumination(
 
 			PassParameters->ViewUniformBuffer = View.ViewUniformBuffer;
 			PassParameters->SceneTexturesStruct = CreateUniformBufferImmediate(SceneTextures, EUniformBufferUsage::UniformBuffer_SingleDraw);
+			//　这个就是相应的输出了，大小为　[128, probe_num]
 			PassParameters->RWGIRadianceRawUAV = GraphBuilder.CreateUAV(GIRadianceRawTexture);
 
 			PassParameters->ProbeSideLengthIrradiance = ProbeSideLengthIrradiance;
@@ -1182,9 +1189,12 @@ void FDeferredShadingSceneRenderer::RenderRayTracingNecaGlobalIllumination(
 			PassParameters->RaysCount = GIRaysCount;
 			PassParameters->NormalBias = NormalBias;
 			PassParameters->EnergyPreservation = View.FinalPostProcessSettings.RayTracingGINecaEnergyPreservation;
+
+			//　第一个pass里面，这两个值也没有使用到
 			PassParameters->TextureSizeIrradiance = FVector4(IrradianceWidth[lod], IrradianceHeight[lod], 1.0f / IrradianceWidth[lod], 1.0f / IrradianceHeight[lod]);
 			PassParameters->TextureSizeDepth = FVector4(DepthWidth[lod], DepthHeight[lod], 1.0f / DepthWidth[lod], 1.0f / DepthHeight[lod]);
 
+			//　第一个pass里面，这两组值也没有使用到
 			PassParameters->RadianceTexture = GraphBuilder.RegisterExternalTexture(GIRadianceGatherRT[lod]);
 			PassParameters->RadianceSampler = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
 			PassParameters->DepthTexture = GraphBuilder.RegisterExternalTexture(GIDepthGatherRT[lod]);
@@ -1261,6 +1271,7 @@ void FDeferredShadingSceneRenderer::RenderRayTracingNecaGlobalIllumination(
 			PassParameters->RandomOrientation = RandomRotation;
 			PassParameters->RawRadianceTextureSize = RawIrradianceTextureSize;
 
+			// 转换为gather贴图的，start uv坐标
 			PassParameters->UpdateStartPosition = FVector4((StartProbeId.X + StartProbeId.Z * ProbeCounts[lod].X) * (ProbeSideLengthDepth + 2), StartProbeId.Y * (ProbeSideLengthDepth + 2), 0, 0);
 			PassParameters->UpdateProbeCount = FVector4(ProbeBudgets[UpdateLodLevel].X, ProbeBudgets[UpdateLodLevel].Y, ProbeBudgets[UpdateLodLevel].Z, 0);
 			PassParameters->WorldGIProbeCount = FVector4(ProbeCounts[lod].X, ProbeCounts[lod].Y, ProbeCounts[lod].Z, 0);
