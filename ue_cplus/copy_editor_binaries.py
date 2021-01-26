@@ -1,7 +1,7 @@
 import os, sys
 import shutil
 
-DEST_ROOT = r'H:\UE_offical\UE_4.26'
+DEST_ROOT = r'H:\test_engine'
 DestEnginePluginsDir = os.path.abspath(os.path.join(DEST_ROOT, 'Engine/Plugins'))
 DestEngineBinariesDir = os.path.abspath(os.path.join(DEST_ROOT, 'Engine/Binaries'))
 
@@ -31,7 +31,11 @@ if __name__ == "__main__":
 	try:
 		os.chdir(EnginePluginsDir)
 		for root, dirs, files in os.walk("."):
-			if root.endswith(r"\Binaries") or root.endswith(r"\ScriptGeneratorPlugin"):
+			if root.endswith(r"\Resources") or root.endswith(r"\Paper2D"):
+				#print(root)
+				copy_to_dest(root, DestEnginePluginsDir)
+			
+			if root.endswith(r"\Binaries"):
 				for dir in dirs:
 					dir_to_copy = os.path.join(root, dir)
 					print(dir_to_copy)
